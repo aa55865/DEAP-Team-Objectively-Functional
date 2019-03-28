@@ -1,0 +1,15 @@
+import random
+from deap import base, creator, tools
+
+creator.create("FitnessMulti", base.Fitness, weights=(-1, -1)) #multiple weights arguments for multiobjective (NSGAII)
+creator.create("Individual", list, fitness=creator.FitnessMulti) #creates individual class (type = list) with fitness attribute
+
+IND_SIZE=10 #number of values carried by an individual
+
+toolbox = base.Toolbox()
+toolbox.register("attr_float", random.random) #registers type of value used to create individuals
+toolbox.register("individual", tools.initRepeat, creator.Individual, toolbox.attr_float, n=IND_SIZE) #registers indiviaul
+
+
+ind1 = toolbox.individual()
+print(ind1)

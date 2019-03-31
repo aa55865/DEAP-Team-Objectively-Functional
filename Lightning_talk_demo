@@ -1,15 +1,83 @@
-import random
-from deap import base, creator, tools
+import time, array, random, copy, math
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 
-creator.create("FitnessMulti", base.Fitness, weights=(-1, -1)) #multiple weights arguments for multiobjective (NSGAII)
-creator.create("Individual", list, fitness=creator.FitnessMulti) #creates individual class (type = list) with fitness attribute
+from deap import algorithms, base, benchmarks, tools, creator
 
-IND_SIZE=10 #number of values carried by an individual
+creator.create("FitnessMin", base.Fitness, weights=(-1.0,-1.0))
+creator.create("Individual", array.array, typecode='d', fitness=creator.FitnessMin)
+
+def solHX(individual):
+	m_dot = 0.2
+	q = 1000
+	f = 0.04
+	rho = 997.1
+	cp = 4200
+	c = 0.02
+	g = 9.8
+	Lsnum1 = 6*m_dot*cp/q
+	Lsnum2 = math.pi*individual[0]*(1.5*individual[0]+0.5*c)+(individual[1]-1)*0.25*(math.pi**2)*((1.5*individual[0])**2-(0.5*individual[0])**2)
+	Ls = (Lsnum1-Lsnum2)/(math.pi*individual[0]*individual[1])
+	s = (8*f/(math.pi**2*g))*((m_dot/rho)**2/(individual[0]**5))
+	Leff = Ls*individual[1]+(3*individual[0]+c)+50*individual[0]*(individual[1]-1)
+	hloss = s*Leff
+	henc = individual[0]+c
+	wenc = individual[0]*individual[1]+individual[0]*(individual[1]-1)+c
+	lenc = Ls + 3*individual[0] + c
+	vol = lenc*wenc*henc
+	if lenc > 1.5:
+		vol,hloss = 100, 100
+	return vol, hloss, lenc
+
 
 toolbox = base.Toolbox()
-toolbox.register("attr_float", random.random) #registers type of value used to create individuals
-toolbox.register("individual", tools.initRepeat, creator.Individual, toolbox.attr_float, n=IND_SIZE) #registers indiviaul
+BOUND_LOW, BOUND_UP = 0.02,100
+NDIM = 2
+toolbox.register("evaluate", solHX)
+
+def uniform(low, up, size=None):
+    try:
+        return [random.uniform(a, b) for a, b in zip(low, up)]
+    except TypeError:
+        return [random.uniform(a, b) for a, b in zip([low] * size, [up] * size)]
+
+toolbox.register("attr_float", uniform, BOUND_LOW, BOUND_UP, NDIM)
+toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.attr_float)
+toolbox.register("population", tools.initRepeat, list, toolbox.individual)
+
+num_samples = 50
+limits = [np.arange(BOUND_LOW, BOUND_UP, (BOUND_UP - BOUND_LOW)/num_samples)] * NDIM
+sample_x = np.meshgrid(*limits)
+flat = []
+for i in range(len(sample_x)):
+    x_i = sample_x[i]
+    flat.append(x_i.reshape(num_samples**NDIM))
+example_pop = toolbox.population(n=num_samples**NDIM)
+for i, ind in enumerate(example_pop):
+    for j in range(len(flat)):
+        ind[j] = flat[j][i]
+    if ind[0] > 0.12:
+    	ind[0] = random.uniform(0.02,0.12)
+    if ind[1] is not 'int':
+    	ind[1] = random.randint(1,100)
+
+fitnesses = toolbox.map(toolbox.evaluate, example_pop)
+for ind, fit in zip(example_pop, fitnesses):
+    ind.fitness.values = fit
+
+# a_given_individual = toolbox.population(n=1)[0]
+# a_given_individual[0] = 0.04
+# a_given_individual[1] = 15
+# a_given_individual.fitness.values = toolbox.evaluate(a_given_individual)
 
 
-ind1 = toolbox.individual()
-print(ind1)
+non_dom = tools.sortNondominated(example_pop, k=len(example_pop), first_front_only=True)[0]
+
+
+for ind in non_dom:
+    plt.plot(ind.fitness.values[0], ind.fitness.values[1], 'bo')
+plt.title('Solar HX Pareto front')
+plt.xlabel('Volume [m^3]')
+plt.ylabel('Head Loss [m]')
+plt.show()

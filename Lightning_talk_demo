@@ -5,10 +5,10 @@ import matplotlib.pyplot as plt
 
 from deap import algorithms, base, benchmarks, tools, creator
 
-creator.create("FitnessMin", base.Fitness, weights=(-1.0,-1.0))
-creator.create("Individual", array.array, typecode='d', fitness=creator.FitnessMin)
+creator.create("FitnessMin", base.Fitness, weights=(-1.0,-1.0)) #creates Fitness class, assigns weights to objective(s) used to determine an individual's fitness
+creator.create("Individual", array.array, typecode='d', fitness=creator.FitnessMin) #creates Individual class (type = array) with a fitness attribute
 
-def solHX(individual):
+def solHX(individual): ### this algorithm calculates objective function values from individual values to determine fitness
 	m_dot = 0.2
 	q = 1000
 	f = 0.04
@@ -31,21 +31,34 @@ def solHX(individual):
 	return vol, hloss, lenc
 
 
-toolbox = base.Toolbox()
+toolbox = base.Toolbox() # "the toolbox is a container for all the tools selected by the user" - DEAP documentation
 BOUND_LOW, BOUND_UP = 0.02,100
 NDIM = 2
-toolbox.register("evaluate", solHX)
+toolbox.register("evaluate", solHX) #registers the 'evaluate' alias in the toolbox, which refers to the solHX function
 
-def uniform(low, up, size=None):
+###General form of 'register': register(alias, method[, argument[, ...]])###
+'''Parameters:	
+alias – The name the operator will take in the toolbox. If the alias already exist it will overwrite the the operator already present.
+method – The function to which the alias refers.
+argument – One or more argument (and keyword argument) to pass automatically to the registered function when called, optional.'''
+
+
+def uniform(low, up, size=None): ###this function creates random floats between 'low' and 'up'
     try:
         return [random.uniform(a, b) for a, b in zip(low, up)]
     except TypeError:
         return [random.uniform(a, b) for a, b in zip([low] * size, [up] * size)]
 
-toolbox.register("attr_float", uniform, BOUND_LOW, BOUND_UP, NDIM)
-toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.attr_float)
-toolbox.register("population", tools.initRepeat, list, toolbox.individual)
+###sets the type and range of values contained in each individual###
+toolbox.register("attr_float", uniform, BOUND_LOW, BOUND_UP, NDIM) #attr_float refers to function uniform, with args B_LOW,B_UP,NDIM
 
+###registers the tool to create individuals (used by calling, for example, ind1 = toolbox.individual())###
+toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.attr_float) #individual refers to function initIterate, with args c.Ind & tool.attr_float
+
+###registers the tool to create a population of individuals (used by calling, for example, pop1 = toolbox.population(n=popsize))###
+toolbox.register("population", tools.initRepeat, list, toolbox.individual) #population referst to func initRepeat, with args list and tool.individual
+
+###creates population distributed as a mesh###
 num_samples = 50
 limits = [np.arange(BOUND_LOW, BOUND_UP, (BOUND_UP - BOUND_LOW)/num_samples)] * NDIM
 sample_x = np.meshgrid(*limits)
@@ -60,17 +73,12 @@ for i, ind in enumerate(example_pop):
     if ind[0] > 0.12:
     	ind[0] = random.uniform(0.02,0.12)
     if ind[1] is not 'int':
-    	ind[1] = random.randint(1,100)
+    	ind[1] = random.randint(1,400)
 
+###set fitness values for all individuals in the population###
 fitnesses = toolbox.map(toolbox.evaluate, example_pop)
 for ind, fit in zip(example_pop, fitnesses):
     ind.fitness.values = fit
-
-# a_given_individual = toolbox.population(n=1)[0]
-# a_given_individual[0] = 0.04
-# a_given_individual[1] = 15
-# a_given_individual.fitness.values = toolbox.evaluate(a_given_individual)
-
 
 non_dom = tools.sortNondominated(example_pop, k=len(example_pop), first_front_only=True)[0]
 

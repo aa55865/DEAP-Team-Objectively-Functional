@@ -1,0 +1,91 @@
+#CREATE INITIAL POPULATION
+#	create individual which contains design vars (infill type, thicknesses, density)
+#	create population of individuals
+
+#while GENS < MAX_GENS
+#	for individual in population:
+#		feed design vars into abaqus
+#		while 'results file' not in directory:
+#			wait
+#		individual.fitness = 'results file data' (avg. temp, strength-to-weight)
+
+#	###NOW HAVE POPULATION & FITNESSES###
+#	rank, crossover, mutate population (DEAP built-in alg) 
+#	GENS += 1
+
+import time, array, random, copy, math
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+from deap import algorithms, base, benchmarks, tools, creator
+
+creator.create("FitnessMin", base.Fitness, weights=(-1.0,-1.0)) #creates Fitness class with two objectives to be minimized (Thermal Conductivity, Strength/Weight)
+creator.create("Individual", array.array, typecode='d', fitness=creator.FitnessMin) #creates Individual class (type = array) with a fitness attribute
+
+def Abaqus_evaluation(individual): ### this algorithm calculates objective function values from individual values to determine fitness
+#	feed design vars into ABAQUS (individual[0],individual[1],individual[2]...etc.)
+#	
+
+	return T_conductivity, strength_to_weight
+
+
+toolbox = base.Toolbox() # "the toolbox is a container for all the tools selected by the user" - DEAP documentation
+BOUND_LOW, BOUND_UP = 0.02,100
+NDIM = 2
+toolbox.register("evaluate", solHX) #registers the 'evaluate' alias in the toolbox, which refers to the solHX function
+
+###General form of 'register': register(alias, method[, argument[, ...]])###
+'''Parameters:	
+alias – The name the operator will take in the toolbox. If the alias already exist it will overwrite the the operator already present.
+method – The function to which the alias refers.
+argument – One or more argument (and keyword argument) to pass automatically to the registered function when called, optional.'''
+
+
+def uniform(low, up, size=None): ###this function creates random floats between 'low' and 'up'
+    try:
+        return [random.uniform(a, b) for a, b in zip(low, up)]
+    except TypeError:
+        return [random.uniform(a, b) for a, b in zip([low] * size, [up] * size)]
+
+###sets the type and range of values contained in each individual###
+toolbox.register("attr_float", uniform, BOUND_LOW, BOUND_UP, NDIM) #attr_float refers to function uniform, with args B_LOW,B_UP,NDIM
+
+###registers the tool to create individuals (used by calling, for example, ind1 = toolbox.individual())###
+toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.attr_float) #individual refers to function initIterate, with args c.Ind & tool.attr_float
+
+###registers the tool to create a population of individuals (used by calling, for example, pop1 = toolbox.population(n=popsize))###
+toolbox.register("population", tools.initRepeat, list, toolbox.individual) #population referst to func initRepeat, with args list and tool.individual
+
+###creates population distributed as a mesh###
+num_samples = 50
+limits = [np.arange(BOUND_LOW, BOUND_UP, (BOUND_UP - BOUND_LOW)/num_samples)] * NDIM
+sample_x = np.meshgrid(*limits)
+flat = []
+for i in range(len(sample_x)):
+    x_i = sample_x[i]
+    flat.append(x_i.reshape(num_samples**NDIM))
+example_pop = toolbox.population(n=num_samples**NDIM)
+for i, ind in enumerate(example_pop):
+    for j in range(len(flat)):
+        ind[j] = flat[j][i]
+    if ind[0] > 0.12:
+    	ind[0] = random.uniform(0.02,0.12)
+    if ind[1] is not 'int':
+    	ind[1] = random.randint(1,400)
+
+###set fitness values for all individuals in the population###
+fitnesses = toolbox.map(toolbox.evaluate, example_pop)
+for ind, fit in zip(example_pop, fitnesses):
+    ind.fitness.values = fit
+
+###sort the 'grid' of designs and corresponding fitnesses to determine which ones appear to be Pareto optimal
+non_dom = tools.sortNondominated(example_pop, k=len(example_pop), first_front_only=True)[0]
+
+
+for ind in non_dom:
+    plt.plot(ind.fitness.values[0], ind.fitness.values[1], 'bo')
+plt.title('Solar HX Pareto front')
+plt.xlabel('Volume [m^3]')
+plt.ylabel('Head Loss [m]')
+plt.show()

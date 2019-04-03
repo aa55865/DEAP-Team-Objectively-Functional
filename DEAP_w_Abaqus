@@ -23,9 +23,14 @@ from deap import algorithms, base, benchmarks, tools, creator
 creator.create("FitnessMin", base.Fitness, weights=(-1.0,-1.0)) #creates Fitness class with two objectives to be minimized (Thermal Conductivity, Strength/Weight)
 creator.create("Individual", array.array, typecode='d', fitness=creator.FitnessMin) #creates Individual class (type = array) with a fitness attribute
 
-def Abaqus_evaluation(individual): ### this algorithm calculates objective function values from individual values to determine fitness
-#	feed design vars into ABAQUS (individual[0],individual[1],individual[2]...etc.)
-#	
+def Abaqus_evaluation(individual): ### this algorithm calculates fitness values for a given individual
+#	put design variables contained in individual (individual[0] = thickness, individual[1] = infill type, etc.) into script to generate Abaqus model
+#	while 'results file' not in 'Abaqus results directory':
+#		wait
+#	read Abaqus 'results file' into python and parse
+
+#	T_conductivity = 'temperature simulation data'
+#	strength_to_weight = 'load simulation data'
 
 	return T_conductivity, strength_to_weight
 

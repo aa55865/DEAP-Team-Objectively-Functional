@@ -5,58 +5,58 @@ from datetime import datetime
 from deap import algorithms, base, tools, creator
 
 def Abaqus_evaluation(individual): ### this algorithm calculates fitness values for a given individual
-#	convert values contained in individual into script to generate Abaqus model
-#		if individual[0] == 'zig-zag':
-#			*generate abaqus script based on zig-zag infill*
-#		elif individual[0] == 'sine-wave':
-#			*generate abaqus script based on sine-wave infill*
-#		elif individual[0] == 'strut':
-#			*generate abaqus script based on strut infill*
-#		etc...
+#   convert values contained in individual into script to generate Abaqus model
+#       if individual[0] == 'zig-zag':
+#           *generate abaqus script based on zig-zag infill*
+#       elif individual[0] == 'sine-wave':
+#           *generate abaqus script based on sine-wave infill*
+#       elif individual[0] == 'strut':
+#           *generate abaqus script based on strut infill*
+#       etc...
 
-#	while 'results file' not in 'Abaqus results directory':
-#		wait
+#   while 'results file' not in 'Abaqus results directory':
+#       wait
 
-#	read Abaqus 'results file' into python and parse
-#	T_conductivity = 'temperature simulation data'
-#	strength_to_weight = 'load simulation data'
-	T_conductivity = len(individual[0])+individual[1]**2-individual[2]+individual[3]**3
-	strength_to_weight = individual[1]**2+individual[2]**3+individual[3]-len(individual[0])
+#   read Abaqus 'results file' into python and parse
+#   T_conductivity = 'temperature simulation data'
+#   strength_to_weight = 'load simulation data'
+    T_conductivity = 0.5*(math.sqrt(1+(individual[1]+individual[2])**2)*math.sqrt(1+(individual[1]-individual[2])**2)+individual[1]-individual[2])
+    stngth_to_wght = 0.5*(math.sqrt(1+(individual[1]+individual[2])**2)*math.sqrt(1+(individual[1]-individual[2])**2)-individual[1]-individual[2])
 
-	return T_conductivity, strength_to_weight
+    return T_conductivity, stngth_to_wght
 
 
-def uniform(designVars): #this function determines the values that fill each individual
+def uniform(designVars): #this function determines the values that fill each individual in the intial population
     individual = [None]*designVars
     decider = random.randint(0,2) ###DETERMINE INFILL TYPE
-    if decider == 0: individual[0] = 'zig-zag'
-    elif decider ==1: individual[0] = 'sine-wave'       
-    elif decider ==2: individual[0] = 'strut'
-    individual[1] = random.uniform(1,5) ###DETERMINE INFILL THICKNESS
-    individual[2] = random.uniform(6,10) ###DETERMINE WALL THICKNESS
-    individual[3] = random.uniform(11,15) ###DETERMINE INFILL SPACING
+    if decider == 0: individual[0] = 'patt1'
+    elif decider ==1: individual[0] = 'patt2'
+    elif decider ==2: individual[0] = 'patt3'
+    individual[1] = random.uniform(0,1) ###DETERMINE INFILL THICKNESS
+    individual[2] = random.uniform(0,1) ###DETERMINE WALL THICKNESS
+    individual[3] = random.uniform(0,1) ###DETERMINE INFILL SPACING
     return individual
 
 def cxList(ind1, ind2): #define crossover strategy for lists
-	cxPt = random.randint(0,len(ind1)-1)
-	child1 = toolbox.individual()
-	child2 = toolbox.individual()
-	child1[::] = ind1[0:cxPt]+ind2[cxPt::]
-	child2[::] = ind2[0:cxPt]+ind1[cxPt::]
+    cxPt = random.randint(0,len(ind1)-1)
+    child1 = toolbox.individual()
+    child2 = toolbox.individual()
+    child1[::] = ind1[0:cxPt]+ind2[cxPt::]
+    child2[::] = ind2[0:cxPt]+ind1[cxPt::]
 
-	return child1,child2
+    return child1,child2
 
 def mutList(individual): #define mutation strategy for lists
-	mutPoint = random.randint(0,len(individual))
-	if mutPoint==0:
-		decider = random.randint(0,2) ###MUTATE INFILL TYPE
-		if decider == 0: individual[0] = 'zig-zag'
-		elif decider ==1: individual[0] = 'sine-wave'       
-		elif decider ==2: individual[0] = 'strut'
-	if mutPoint==1: individual[1] = random.uniform(1,5) ###MUTATE INFILL THICKNESS
-	if mutPoint==2: individual[2] = random.uniform(6,10) ###MUTATE WALL THICKNESS
-	if mutPoint==3: individual[3] = random.uniform(11,15) ###MUTATE INFILL SPACING
-	return individual,
+    mutPoint = random.randint(0,len(individual))
+    if mutPoint==0:
+        decider = random.randint(0,2) ###MUTATE INFILL TYPE
+        if decider == 0: individual[0] = 'patt1'
+        elif decider ==1: individual[0] = 'patt2'
+        elif decider ==2: individual[0] = 'patt3'
+    if mutPoint==1: individual[1] = random.uniform(0,1) ###MUTATE INFILL THICKNESS
+    if mutPoint==2: individual[2] = random.uniform(0,1) ###MUTATE WALL THICKNESS
+    if mutPoint==3: individual[3] = random.uniform(0,1) ###MUTATE INFILL SPACING
+    return individual,
 
 designVars = 4 #number of values contained within an individual
 creator.create("Fitness", base.Fitness, weights=(-1.0,-1.0)) #creates Fitness class with two objectives to be minimized (Thermal Conductivity, Strength/Weight)
@@ -79,22 +79,33 @@ toolbox.register("evaluate", Abaqus_evaluation)
 toolbox.register("select", tools.selNSGA2)
 
 
-def main():
+def main(): ###THIS FUNCTION RUNS THE ALGORITHM BUILT INTO DEAP
     random.seed(datetime.now())
-    NGEN = 50 #number of generations
+    NGEN = 100 #number of generations
     MU = 50 #number of individuals to select for next generation
-    LAMBDA = 500 #number of children produced at each generation
+    LAMBDA = 100 #number of children produced at each generation
     CXPB = 0.80 #crossover probability
     MUTPB = 0.05 #mutation probability
     
     pop = toolbox.population(n=MU)
     hof = tools.ParetoFront()
     stats = tools.Statistics(lambda ind: ind.fitness.values)
-    # stats.register("avg", tools.mean)
-    # stats.register("std", tools.std)
-    stats.register("min", min)
-    stats.register("max", max)
+    stats.register("avg", np.mean, axis=0)
+    stats.register("std", np.std, axis=0)
+    stats.register("min", np.min, axis=0)
+    stats.register("max", np.max, axis=0)
     algorithms.eaMuPlusLambda(pop, toolbox, MU, LAMBDA, CXPB, MUTPB, NGEN, stats, halloffame=hof)
+    return pop, stats, hof
+
+
+
 
 if __name__ == '__main__':
-   main()
+    stats = main()
+    non_dom = tools.sortNondominated(stats[0], k=len(stats[0]), first_front_only=True)[0]
+    for ind in non_dom:
+        plt.plot(ind.fitness.values[0], ind.fitness.values[1], 'bo')
+    plt.title('Sample Pareto front')
+    plt.xlabel('T_conductivity')
+    plt.ylabel('Strength-to-Weight')
+    plt.show()

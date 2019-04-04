@@ -1,91 +1,111 @@
-import time, array, random, copy, math
+import time, random, copy, math
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
+from datetime import datetime
+from deap import algorithms, base, tools, creator
 
-from deap import algorithms, base, benchmarks, tools, creator
+def Abaqus_evaluation(individual): ### this algorithm calculates fitness values for a given individual
+#   convert values contained in individual into script to generate Abaqus model
+#       if individual[0] == 'zig-zag':
+#           *generate abaqus script based on zig-zag infill*
+#       elif individual[0] == 'sine-wave':
+#           *generate abaqus script based on sine-wave infill*
+#       elif individual[0] == 'strut':
+#           *generate abaqus script based on strut infill*
+#       etc...
 
-creator.create("FitnessMin", base.Fitness, weights=(-1.0,-1.0)) #creates Fitness class, assigns weights to objective(s) used to determine an individual's fitness
-creator.create("Individual", array.array, typecode='d', fitness=creator.FitnessMin) #creates Individual class (type = array) with a fitness attribute
+#   while 'results file' not in 'Abaqus results directory':
+#       wait
 
-def solHX(individual): ### this algorithm calculates objective function values from individual values to determine fitness
-	m_dot = 0.2
-	q = 1000
-	f = 0.04
-	rho = 997.1
-	cp = 4200
-	c = 0.02
-	g = 9.8
-	Lsnum1 = 6*m_dot*cp/q
-	Lsnum2 = math.pi*individual[0]*(1.5*individual[0]+0.5*c)+(individual[1]-1)*0.25*(math.pi**2)*((1.5*individual[0])**2-(0.5*individual[0])**2)
-	Ls = (Lsnum1-Lsnum2)/(math.pi*individual[0]*individual[1])
-	s = (8*f/(math.pi**2*g))*((m_dot/rho)**2/(individual[0]**5))
-	Leff = Ls*individual[1]+(3*individual[0]+c)+50*individual[0]*(individual[1]-1)
-	hloss = s*Leff
-	henc = individual[0]+c
-	wenc = individual[0]*individual[1]+individual[0]*(individual[1]-1)+c
-	lenc = Ls + 3*individual[0] + c
-	vol = lenc*wenc*henc
-	if lenc > 1.5:
-		vol,hloss = 100, 100
-	return vol, hloss, lenc
+#   read Abaqus 'results file' into python and parse
+#   T_conductivity = 'temperature simulation data'
+#   strength_to_weight = 'load simulation data'
+    T_conductivity = 0.5*(math.sqrt(1+(individual[1]+individual[2])**2)*math.sqrt(1+(individual[1]-individual[2])**2)+individual[1]-individual[2])
+    stngth_to_wght = 0.5*(math.sqrt(1+(individual[1]+individual[2])**2)*math.sqrt(1+(individual[1]-individual[2])**2)-individual[1]-individual[2])
 
+    return T_conductivity, stngth_to_wght
+
+
+def uniform(designVars): #this function determines the values that fill each individual in the intial population
+    individual = [None]*designVars
+    decider = random.randint(0,2) ###DETERMINE INFILL TYPE
+    if decider == 0: individual[0] = 'patt1'
+    elif decider ==1: individual[0] = 'patt2'
+    elif decider ==2: individual[0] = 'patt3'
+    individual[1] = random.uniform(0,1) ###DETERMINE INFILL THICKNESS
+    individual[2] = random.uniform(0,1) ###DETERMINE WALL THICKNESS
+    individual[3] = random.uniform(0,1) ###DETERMINE INFILL SPACING
+    return individual
+
+def cxList(ind1, ind2): #define crossover strategy for lists
+    cxPt = random.randint(0,len(ind1)-1)
+    child1 = toolbox.individual()
+    child2 = toolbox.individual()
+    child1[::] = ind1[0:cxPt]+ind2[cxPt::]
+    child2[::] = ind2[0:cxPt]+ind1[cxPt::]
+
+    return child1,child2
+
+def mutList(individual): #define mutation strategy for lists
+    mutPoint = random.randint(0,len(individual))
+    if mutPoint==0:
+        decider = random.randint(0,2) ###MUTATE INFILL TYPE
+        if decider == 0: individual[0] = 'patt1'
+        elif decider ==1: individual[0] = 'patt2'
+        elif decider ==2: individual[0] = 'patt3'
+    if mutPoint==1: individual[1] = random.uniform(0,1) ###MUTATE INFILL THICKNESS
+    if mutPoint==2: individual[2] = random.uniform(0,1) ###MUTATE WALL THICKNESS
+    if mutPoint==3: individual[3] = random.uniform(0,1) ###MUTATE INFILL SPACING
+    return individual,
+
+designVars = 4 #number of values contained within an individual
+creator.create("Fitness", base.Fitness, weights=(-1.0,-1.0)) #creates Fitness class with two objectives to be minimized (Thermal Conductivity, Strength/Weight)
+creator.create("Individual", list, fitness=creator.Fitness) #creates Individual class (type = list) with a fitness attribute
 
 toolbox = base.Toolbox() # "the toolbox is a container for all the tools selected by the user" - DEAP documentation
-BOUND_LOW, BOUND_UP = 0.02,100
-NDIM = 2
-toolbox.register("evaluate", solHX) #registers the 'evaluate' alias in the toolbox, which refers to the solHX function
-
-###General form of 'register': register(alias, method[, argument[, ...]])###
-'''Parameters:	
-alias – The name the operator will take in the toolbox. If the alias already exist it will overwrite the the operator already present.
-method – The function to which the alias refers.
-argument – One or more argument (and keyword argument) to pass automatically to the registered function when called, optional.'''
-
-
-def uniform(low, up, size=None): ###this function creates random floats between 'low' and 'up'
-    try:
-        return [random.uniform(a, b) for a, b in zip(low, up)]
-    except TypeError:
-        return [random.uniform(a, b) for a, b in zip([low] * size, [up] * size)]
-
-###sets the type and range of values contained in each individual###
-toolbox.register("attr_float", uniform, BOUND_LOW, BOUND_UP, NDIM) #attr_float refers to function uniform, with args B_LOW,B_UP,NDIM
-
-###registers the tool to create individuals (used by calling, for example, ind1 = toolbox.individual())###
-toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.attr_float) #individual refers to function initIterate, with args c.Ind & tool.attr_float
-
-###registers the tool to create a population of individuals (used by calling, for example, pop1 = toolbox.population(n=popsize))###
+#sets the type and range of values contained in each individual
+toolbox.register("designVar", uniform, designVars) #attr_designVar refers to function 'uniform', with args designVars
+#registers the tool to create individuals (i.e. ind1 = toolbox.individual())
+toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.designVar) #individual refers to function initIterate, with args c.Ind & tool.attr_designVar
+#registers the tool to create a population of individuals (i.e. pop1 = toolbox.population(n=popsize))#
 toolbox.register("population", tools.initRepeat, list, toolbox.individual) #population referst to func initRepeat, with args list and tool.individual
-
-###creates population distributed as a mesh###
-num_samples = 50
-limits = [np.arange(BOUND_LOW, BOUND_UP, (BOUND_UP - BOUND_LOW)/num_samples)] * NDIM
-sample_x = np.meshgrid(*limits)
-flat = []
-for i in range(len(sample_x)):
-    x_i = sample_x[i]
-    flat.append(x_i.reshape(num_samples**NDIM))
-example_pop = toolbox.population(n=num_samples**NDIM)
-for i, ind in enumerate(example_pop):
-    for j in range(len(flat)):
-        ind[j] = flat[j][i]
-    if ind[0] > 0.12:
-    	ind[0] = random.uniform(0.02,0.12)
-    if ind[1] is not 'int':
-    	ind[1] = random.randint(1,400)
-
-###set fitness values for all individuals in the population###
-fitnesses = toolbox.map(toolbox.evaluate, example_pop)
-for ind, fit in zip(example_pop, fitnesses):
-    ind.fitness.values = fit
-
-non_dom = tools.sortNondominated(example_pop, k=len(example_pop), first_front_only=True)[0]
+#registers the crossover strategy for lists
+toolbox.register("mate", cxList)
+#registers the mutation strategy for lists
+toolbox.register("mutate",mutList)
+#registers the function to determine fitness when toolbox.evaluate is called
+toolbox.register("evaluate", Abaqus_evaluation) 
+#registers the genetic algorithm to be implemented
+toolbox.register("select", tools.selNSGA2)
 
 
-for ind in non_dom:
-    plt.plot(ind.fitness.values[0], ind.fitness.values[1], 'bo')
-plt.title('Solar HX Pareto front')
-plt.xlabel('Volume [m^3]')
-plt.ylabel('Head Loss [m]')
-plt.show()
+def main(): ###THIS FUNCTION RUNS THE ALGORITHM BUILT INTO DEAP
+    random.seed(datetime.now())
+    NGEN = 100 #number of generations
+    MU = 50 #number of individuals to select for next generation
+    LAMBDA = 100 #number of children produced at each generation
+    CXPB = 0.80 #crossover probability
+    MUTPB = 0.05 #mutation probability
+    
+    pop = toolbox.population(n=MU)
+    hof = tools.ParetoFront()
+    stats = tools.Statistics(lambda ind: ind.fitness.values)
+    stats.register("avg", np.mean, axis=0)
+    stats.register("std", np.std, axis=0)
+    stats.register("min", np.min, axis=0)
+    stats.register("max", np.max, axis=0)
+    algorithms.eaMuPlusLambda(pop, toolbox, MU, LAMBDA, CXPB, MUTPB, NGEN, stats, halloffame=hof)
+    return pop, stats, hof
+
+
+
+
+if __name__ == '__main__':
+    stats = main()
+    non_dom = tools.sortNondominated(stats[0], k=len(stats[0]), first_front_only=True)[0]
+    for ind in non_dom:
+        plt.plot(ind.fitness.values[0], ind.fitness.values[1], 'bo')
+    plt.title('Sample Pareto front')
+    plt.xlabel('T_conductivity')
+    plt.ylabel('Strength-to-Weight')
+    plt.show()

@@ -1,29 +1,18 @@
-#CREATE INITIAL POPULATION
-#	create individual which contains design vars (infill type, thicknesses, density)
-#	create population of individuals
-
-#while GENS < MAX_GENS
-#	for individual in population:
-#		feed design vars into abaqus
-#		while 'results file' not in directory:
-#			wait
-#		individual.fitness = 'results file data' (thermal conductivity, strength-to-weight)
-
-#	###NOW HAVE POPULATION & FITNESSES###
-#	rank, crossover, mutate population (DEAP built-in alg) 
-#	GENS += 1
-
-import time, array, random, copy, math
+import time, random, copy, math
 import numpy as np
 import matplotlib.pyplot as plt
-
+from datetime import datetime
 from deap import algorithms, base, tools, creator
-
-creator.create("FitnessMin", base.Fitness, weights=(-1.0,-1.0)) #creates Fitness class with two objectives to be minimized (Thermal Conductivity, Strength/Weight)
-creator.create("Individual", list, typecode='d', fitness=creator.FitnessMin) #creates Individual class (type = array) with a fitness attribute
 
 def Abaqus_evaluation(individual): ### this algorithm calculates fitness values for a given individual
 #	convert values contained in individual into script to generate Abaqus model
+#		if individual[0] == 'zig-zag':
+#			*generate abaqus script based on zig-zag infill*
+#		elif individual[0] == 'sine-wave':
+#			*generate abaqus script based on sine-wave infill*
+#		elif individual[0] == 'strut':
+#			*generate abaqus script based on strut infill*
+#		etc...
 
 #	while 'results file' not in 'Abaqus results directory':
 #		wait
@@ -31,63 +20,81 @@ def Abaqus_evaluation(individual): ### this algorithm calculates fitness values 
 #	read Abaqus 'results file' into python and parse
 #	T_conductivity = 'temperature simulation data'
 #	strength_to_weight = 'load simulation data'
+	T_conductivity = len(individual[0])+individual[1]**2-individual[2]+individual[3]**3
+	strength_to_weight = individual[1]**2+individual[2]**3+individual[3]-len(individual[0])
 
 	return T_conductivity, strength_to_weight
 
 
-toolbox = base.Toolbox() # "the toolbox is a container for all the tools selected by the user" - DEAP documentation
-designVars = 4 #number of values contained within an individual
-
-toolbox.register("evaluate", Abaqus_evaluation) #registers the function to determine fitness when toolbox.evaluate is called
 def uniform(designVars): #this function determines the values that fill each individual
-    counter = 0
     individual = [None]*designVars
-    while counter < designVars:
-        if counter == 0: ##determine infill type
-            decider = random.randint(0,2)
-            if decider == 0:
-                individual[counter] = 'zig-zag'
-            elif decider ==1:
-                individual[counter] = 'sine-wave'
-            elif decider ==2:
-                individual[counter] = 'struts'
-        elif counter == 1: ##determine infill thickness (cm)
-            infill_thickness = random.uniform(1,5)
-            individual[counter] = infill_thickness
-        elif counter ==2: ##determine wall thickness (cm)
-            wall_thickness = random.uniform(6,10)
-            individual[counter] = wall_thickness
-        elif counter ==3:  ##determine infill spacing
-            infill_spacing = random.uniform(11,15)
-            individual[counter] = infill_spacing
-        counter+=1
+    decider = random.randint(0,2) ###DETERMINE INFILL TYPE
+    if decider == 0: individual[0] = 'zig-zag'
+    elif decider ==1: individual[0] = 'sine-wave'       
+    elif decider ==2: individual[0] = 'strut'
+    individual[1] = random.uniform(1,5) ###DETERMINE INFILL THICKNESS
+    individual[2] = random.uniform(6,10) ###DETERMINE WALL THICKNESS
+    individual[3] = random.uniform(11,15) ###DETERMINE INFILL SPACING
     return individual
 
-#sets the type and range of values contained in each individual#
-toolbox.register("design_var", uniform, designVars) #attr_float refers to function uniform, with args B_LOW,B_UP,NDIM
+def cxList(ind1, ind2): #define crossover strategy for lists
+	cxPt = random.randint(0,len(ind1)-1)
+	child1 = toolbox.individual()
+	child2 = toolbox.individual()
+	child1[::] = ind1[0:cxPt]+ind2[cxPt::]
+	child2[::] = ind2[0:cxPt]+ind1[cxPt::]
 
-#registers the tool to create individuals (used by calling, for example, ind1 = toolbox.individual())#
-toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.design_var) #individual refers to function initIterate, with args c.Ind & tool.attr_float
+	return child1,child2
 
+def mutList(individual): #define mutation strategy for lists
+	mutPoint = random.randint(0,len(individual))
+	if mutPoint==0:
+		decider = random.randint(0,2) ###MUTATE INFILL TYPE
+		if decider == 0: individual[0] = 'zig-zag'
+		elif decider ==1: individual[0] = 'sine-wave'       
+		elif decider ==2: individual[0] = 'strut'
+	if mutPoint==1: individual[1] = random.uniform(1,5) ###MUTATE INFILL THICKNESS
+	if mutPoint==2: individual[2] = random.uniform(6,10) ###MUTATE WALL THICKNESS
+	if mutPoint==3: individual[3] = random.uniform(11,15) ###MUTATE INFILL SPACING
+	return individual,
+
+designVars = 4 #number of values contained within an individual
+creator.create("Fitness", base.Fitness, weights=(-1.0,-1.0)) #creates Fitness class with two objectives to be minimized (Thermal Conductivity, Strength/Weight)
+creator.create("Individual", list, fitness=creator.Fitness) #creates Individual class (type = list) with a fitness attribute
+
+toolbox = base.Toolbox() # "the toolbox is a container for all the tools selected by the user" - DEAP documentation
+#sets the type and range of values contained in each individual
+toolbox.register("designVar", uniform, designVars) #attr_designVar refers to function 'uniform', with args designVars
+#registers the tool to create individuals (i.e. ind1 = toolbox.individual())
+toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.designVar) #individual refers to function initIterate, with args c.Ind & tool.attr_designVar
 #registers the tool to create a population of individuals (i.e. pop1 = toolbox.population(n=popsize))#
 toolbox.register("population", tools.initRepeat, list, toolbox.individual) #population referst to func initRepeat, with args list and tool.individual
-
-# toolbox.register("mate", tools.cxSimulatedBinaryBounded, low=BOUND_LOW, up=BOUND_UP, eta=20.0)
-# toolbox.register("mutate", tools.mutPolynomialBounded, low=BOUND_LOW, up=BOUND_UP, eta=20.0, indpb=1.0/NDIM)
-# toolbox.register("select", tools.selNSGA2)
-
-x = toolbox.population(n=2)
-print(x)
-
-# ###set fitness values for all individuals in the population###
-# fitnesses = toolbox.map(toolbox.evaluate, example_pop)
-# for ind, fit in zip(example_pop, fitnesses):
-#     ind.fitness.values = fit
+#registers the crossover strategy for lists
+toolbox.register("mate", cxList)
+#registers the mutation strategy for lists
+toolbox.register("mutate",mutList)
+#registers the function to determine fitness when toolbox.evaluate is called
+toolbox.register("evaluate", Abaqus_evaluation) 
+#registers the genetic algorithm to be implemented
+toolbox.register("select", tools.selNSGA2)
 
 
-# for ind in non_dom:
-#     plt.plot(ind.fitness.values[0], ind.fitness.values[1], 'bo')
-# plt.title('Optized Concrete Wall: Pareto Front')
-# plt.xlabel('Temperature [K]')
-# plt.ylabel('Strength_to_Weight [MPa/kg]')
-# plt.show()
+def main():
+    random.seed(datetime.now())
+    NGEN = 50 #number of generations
+    MU = 50 #number of individuals to select for next generation
+    LAMBDA = 500 #number of children produced at each generation
+    CXPB = 0.80 #crossover probability
+    MUTPB = 0.05 #mutation probability
+    
+    pop = toolbox.population(n=MU)
+    hof = tools.ParetoFront()
+    stats = tools.Statistics(lambda ind: ind.fitness.values)
+    # stats.register("avg", tools.mean)
+    # stats.register("std", tools.std)
+    stats.register("min", min)
+    stats.register("max", max)
+    algorithms.eaMuPlusLambda(pop, toolbox, MU, LAMBDA, CXPB, MUTPB, NGEN, stats, halloffame=hof)
+
+if __name__ == '__main__':
+   main()

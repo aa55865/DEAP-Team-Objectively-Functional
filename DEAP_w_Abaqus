@@ -7,7 +7,7 @@
 #		feed design vars into abaqus
 #		while 'results file' not in directory:
 #			wait
-#		individual.fitness = 'results file data' (avg. temp, strength-to-weight)
+#		individual.fitness = 'results file data' (thermal conductivity, strength-to-weight)
 
 #	###NOW HAVE POPULATION & FITNESSES###
 #	rank, crossover, mutate population (DEAP built-in alg) 
@@ -15,20 +15,20 @@
 
 import time, array, random, copy, math
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 
-from deap import algorithms, base, benchmarks, tools, creator
+from deap import algorithms, base, tools, creator
 
 creator.create("FitnessMin", base.Fitness, weights=(-1.0,-1.0)) #creates Fitness class with two objectives to be minimized (Thermal Conductivity, Strength/Weight)
-creator.create("Individual", array.array, typecode='d', fitness=creator.FitnessMin) #creates Individual class (type = array) with a fitness attribute
+creator.create("Individual", list, typecode='d', fitness=creator.FitnessMin) #creates Individual class (type = array) with a fitness attribute
 
 def Abaqus_evaluation(individual): ### this algorithm calculates fitness values for a given individual
-#	put design variables contained in individual (individual[0] = thickness, individual[1] = infill type, etc.) into script to generate Abaqus model
+#	convert values contained in individual into script to generate Abaqus model
+
 #	while 'results file' not in 'Abaqus results directory':
 #		wait
-#	read Abaqus 'results file' into python and parse
 
+#	read Abaqus 'results file' into python and parse
 #	T_conductivity = 'temperature simulation data'
 #	strength_to_weight = 'load simulation data'
 
@@ -36,61 +36,58 @@ def Abaqus_evaluation(individual): ### this algorithm calculates fitness values 
 
 
 toolbox = base.Toolbox() # "the toolbox is a container for all the tools selected by the user" - DEAP documentation
-BOUND_LOW, BOUND_UP = 0.02,100
-NDIM = 2
-toolbox.register("evaluate", solHX) #registers the 'evaluate' alias in the toolbox, which refers to the solHX function
+designVars = 4 #number of values contained within an individual
 
-###General form of 'register': register(alias, method[, argument[, ...]])###
-'''Parameters:	
-alias – The name the operator will take in the toolbox. If the alias already exist it will overwrite the the operator already present.
-method – The function to which the alias refers.
-argument – One or more argument (and keyword argument) to pass automatically to the registered function when called, optional.'''
+toolbox.register("evaluate", Abaqus_evaluation) #registers the function to determine fitness when toolbox.evaluate is called
+def uniform(designVars): #this function determines the values that fill each individual
+    counter = 0
+    individual = [None]*designVars
+    while counter < designVars:
+        if counter == 0: ##determine infill type
+            decider = random.randint(0,2)
+            if decider == 0:
+                individual[counter] = 'zig-zag'
+            elif decider ==1:
+                individual[counter] = 'sine-wave'
+            elif decider ==2:
+                individual[counter] = 'struts'
+        elif counter == 1: ##determine infill thickness (cm)
+            infill_thickness = random.uniform(1,5)
+            individual[counter] = infill_thickness
+        elif counter ==2: ##determine wall thickness (cm)
+            wall_thickness = random.uniform(6,10)
+            individual[counter] = wall_thickness
+        elif counter ==3:  ##determine infill spacing
+            infill_spacing = random.uniform(11,15)
+            individual[counter] = infill_spacing
+        counter+=1
+    return individual
 
+#sets the type and range of values contained in each individual#
+toolbox.register("design_var", uniform, designVars) #attr_float refers to function uniform, with args B_LOW,B_UP,NDIM
 
-def uniform(low, up, size=None): ###this function creates random floats between 'low' and 'up'
-    try:
-        return [random.uniform(a, b) for a, b in zip(low, up)]
-    except TypeError:
-        return [random.uniform(a, b) for a, b in zip([low] * size, [up] * size)]
+#registers the tool to create individuals (used by calling, for example, ind1 = toolbox.individual())#
+toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.design_var) #individual refers to function initIterate, with args c.Ind & tool.attr_float
 
-###sets the type and range of values contained in each individual###
-toolbox.register("attr_float", uniform, BOUND_LOW, BOUND_UP, NDIM) #attr_float refers to function uniform, with args B_LOW,B_UP,NDIM
-
-###registers the tool to create individuals (used by calling, for example, ind1 = toolbox.individual())###
-toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.attr_float) #individual refers to function initIterate, with args c.Ind & tool.attr_float
-
-###registers the tool to create a population of individuals (used by calling, for example, pop1 = toolbox.population(n=popsize))###
+#registers the tool to create a population of individuals (i.e. pop1 = toolbox.population(n=popsize))#
 toolbox.register("population", tools.initRepeat, list, toolbox.individual) #population referst to func initRepeat, with args list and tool.individual
 
-###creates population distributed as a mesh###
-num_samples = 50
-limits = [np.arange(BOUND_LOW, BOUND_UP, (BOUND_UP - BOUND_LOW)/num_samples)] * NDIM
-sample_x = np.meshgrid(*limits)
-flat = []
-for i in range(len(sample_x)):
-    x_i = sample_x[i]
-    flat.append(x_i.reshape(num_samples**NDIM))
-example_pop = toolbox.population(n=num_samples**NDIM)
-for i, ind in enumerate(example_pop):
-    for j in range(len(flat)):
-        ind[j] = flat[j][i]
-    if ind[0] > 0.12:
-    	ind[0] = random.uniform(0.02,0.12)
-    if ind[1] is not 'int':
-    	ind[1] = random.randint(1,400)
+# toolbox.register("mate", tools.cxSimulatedBinaryBounded, low=BOUND_LOW, up=BOUND_UP, eta=20.0)
+# toolbox.register("mutate", tools.mutPolynomialBounded, low=BOUND_LOW, up=BOUND_UP, eta=20.0, indpb=1.0/NDIM)
+# toolbox.register("select", tools.selNSGA2)
 
-###set fitness values for all individuals in the population###
-fitnesses = toolbox.map(toolbox.evaluate, example_pop)
-for ind, fit in zip(example_pop, fitnesses):
-    ind.fitness.values = fit
+x = toolbox.population(n=2)
+print(x)
 
-###sort the 'grid' of designs and corresponding fitnesses to determine which ones appear to be Pareto optimal
-non_dom = tools.sortNondominated(example_pop, k=len(example_pop), first_front_only=True)[0]
+# ###set fitness values for all individuals in the population###
+# fitnesses = toolbox.map(toolbox.evaluate, example_pop)
+# for ind, fit in zip(example_pop, fitnesses):
+#     ind.fitness.values = fit
 
 
-for ind in non_dom:
-    plt.plot(ind.fitness.values[0], ind.fitness.values[1], 'bo')
-plt.title('Solar HX Pareto front')
-plt.xlabel('Volume [m^3]')
-plt.ylabel('Head Loss [m]')
-plt.show()
+# for ind in non_dom:
+#     plt.plot(ind.fitness.values[0], ind.fitness.values[1], 'bo')
+# plt.title('Optized Concrete Wall: Pareto Front')
+# plt.xlabel('Temperature [K]')
+# plt.ylabel('Strength_to_Weight [MPa/kg]')
+# plt.show()

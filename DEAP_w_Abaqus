@@ -18,38 +18,18 @@ from deap import algorithms, base, tools, creator
 #   population size/number of elites (positional arg)
 #   number of generations (positional arg)
 
-designVars = {'x1': {'interval': [-1.5,1.5], 'points in interval': 50, 'type': 'continuous'}, 'x2': {'interval': [-1.5,1.5], 'points in interval': 50, 'type': 'continuous'}}
+designVars = {'x1': {'interval': [-1.5,1.5],'type': 'continuous'}, 'x2': {'interval': [-1.5,1.5],'type': 'continuous'}}
+
+gens = 50
+popSize = 500
+children = 2000
 mutPB = 0.05
-cxPB = 0.60
-popSize = 100
-elites = 25
-children = 200
-gens = 200
-
-
-def bitAdjust(designVars): #adjust the points in each variable's interval to something that can be encoded in binary
-    bitOptions = [i+1 for i in range(17)] #maximum bits per variable is 16 --> max points in interval is ~60,000
-    for var in designVars:
-        diff = designVars[var]['interval'][1]-designVars[var]['interval'][0]
-        step = diff/designVars[var]['points in interval']
-        bitAttempt = math.log((diff/step + 1),2)
-        for option in bitOptions:
-            if option-bitAttempt > 0:
-                designVars[var].update({'bits': option})
-                del designVars[var]['points in interval']
-                designVars[var].update({'points on interval': 2**option-1})
-                break
-    return designVars
-
-designVars = bitAdjust(designVars)
+cxPB = 0.70
 
 
 def uniform(designVars): #this function determines the values that fill each individual in the intial population
     random.seed(datetime.now())
-    bits=0
-    for var in designVars:
-        bits += designVars[var]['bits']
-    individual = [random.randint(0,1) for _ in range(bits)]
+    individual = [random.uniform(designVars[var]['interval'][0],designVars[var]['interval'][1]) for var in designVars]
     return individual
 
 def cxList(ind1, ind2): #define crossover strategy for lists
@@ -64,30 +44,20 @@ def cxList(ind1, ind2): #define crossover strategy for lists
 def mutList(individual): #define mutation strategy for lists
     random.seed(datetime.now())
     mutPoint = random.randint(0,len(individual)-1)
-    if individual[mutPoint] == 1: individual[mutPoint] = 0
-    else: individual[mutPoint] = 1
+    counter = 0
+    key = None
+    for keys in designVars:
+        if counter == mutPoint: key = keys
+        counter+=1
+    individual[mutPoint] = random.uniform(designVars[key]['interval'][0],designVars[key]['interval'][1])
     return individual,
 
 # DEFINE EVALUATION FUNCTION
 def funcEval(individual):
-    deciInd = []
-    counter = 0
-    for var in designVars:
-        xL = designVars[var]['interval'][0]
-        xU = designVars[var]['interval'][1]
-        diff = xU-xL
-        bits = designVars[var]['bits']
-        step = diff/(2**bits-1)
-        binary = ''.join(map(str,individual[counter:(counter+bits)]))
-        deciVal = int(binary,2)
-        deciInd.append(xL+deciVal*step)
-        counter+=bits
-
     lbda = 0.85
-    d = lbda * math.exp(-(deciInd[0] - deciInd[1]) ** 2)
-    f1 = 0.5 * (math.sqrt(1 + (deciInd[0] + deciInd[1]) ** 2) + math.sqrt(1 + (deciInd[0] - deciInd[1]) ** 2) + deciInd[0] - deciInd[1]) + d
-    f2 = 0.5 * (math.sqrt(1 + (deciInd[0] + deciInd[1]) ** 2) + math.sqrt(1 + (deciInd[0] - deciInd[1]) ** 2) - deciInd[0] + deciInd[1]) + d
-
+    d  = lbda * math.exp(-(individual[0] - individual[1]) ** 2)
+    f1 = 0.5 * (math.sqrt(1 + (individual[0] + individual[1]) ** 2) + math.sqrt(1 + (individual[0] - individual[1]) ** 2) + individual[0] - individual[1]) + d
+    f2 = 0.5 * (math.sqrt(1 + (individual[0] + individual[1]) ** 2) + math.sqrt(1 + (individual[0] - individual[1]) ** 2) - individual[0] + individual[1]) + d
     return f1, f2
 
 creator.create("Fitness", base.Fitness, weights=(-1.0,-1.0))
@@ -102,15 +72,16 @@ toolbox.register("evaluate", funcEval)
 toolbox.register("select", tools.selNSGA2)
 
 
+
 def main(): ###THIS FUNCTION RUNS THE ALGORITHM BUILT INTO DEAP
     random.seed(datetime.now())
     NGEN = gens #number of generations
-    MU = elites #number of individuals to select for next generation
+    MU = popSize #number of individuals to select for next generation
     LAMBDA = children #number of children produced at each generation
     CXPB = cxPB #crossover probability
     MUTPB = mutPB #mutation probability
 
-    pop = toolbox.population(n=popSize)
+    pop = toolbox.population(n=MU)
     hof = tools.ParetoFront()
     stats = tools.Statistics(lambda ind: ind.fitness.values)
     stats.register("avg", np.mean, axis=0)
@@ -119,3 +90,14 @@ def main(): ###THIS FUNCTION RUNS THE ALGORITHM BUILT INTO DEAP
     stats.register("max", np.max, axis=0)
     algorithms.eaMuPlusLambda(pop, toolbox, MU, LAMBDA, CXPB, MUTPB, NGEN, stats, halloffame=hof)
     return pop, stats, hof
+
+
+if __name__ == '__main__':
+    stats = main()
+    non_dom = tools.sortNondominated(stats[0], k=len(stats[0]), first_front_only=True)[0]
+    for ind in non_dom:
+        plt.plot(ind.fitness.values[0],ind.fitness.values[1],'bo')
+    plt.title('Dent Pareto Front')
+    plt.xlabel('f1')
+    plt.ylabel('f2')
+    plt.show()

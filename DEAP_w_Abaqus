@@ -4,92 +4,118 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 from deap import algorithms, base, tools, creator
 
-#define design variables and associated ranges
-theta = [i for i in range(30, 62, 2)] #range of angles for infill pattern (30 - 60 degrees in 2 degree increments)
-t_i = [3, 6, 9, 12, 15] #range of infill thicknesses (cm)
-t_f = [3, 6, 9] #range of front wall thicknesses (cm)
-w_nozzle = 3 #nozzle width (cm)
-t_s = 3 #side wall thickness (cm)
-t_w = 20 #overall width dimension (cm)
-L_w = 300 #overall length dimension (cm)
 
-#define number of design variables contained in each individual
-designVars = 4
+# DEAPsolver will have the following inputs:
+#   design variables (positional arg, stored in dict)
+#       interval
+#       bits (optional)
+#   objective functions (positional arg, stored in dict)
+#       function
+#       min or max
+#       weight
+#   mutation probability (positional arg)
+#   crossover probability (positional arg)
+#   population size/number of elites (positional arg)
+#   number of generations (positional arg)
+
+designVars = {'x1': {'interval': [-1.5,1.5], 'points in interval': 50, 'type': 'continuous'}, 'x2': {'interval': [-1.5,1.5], 'points in interval': 50, 'type': 'continuous'}}
+mutPB = 0.05
+cxPB = 0.60
+popSize = 100
+elites = 25
+children = 200
+gens = 200
+
+
+def bitAdjust(designVars): #adjust the points in each variable's interval to something that can be encoded in binary
+    bitOptions = [i+1 for i in range(17)] #maximum bits per variable is 16 --> max points in interval is ~60,000
+    for var in designVars:
+        diff = designVars[var]['interval'][1]-designVars[var]['interval'][0]
+        step = diff/designVars[var]['points in interval']
+        bitAttempt = math.log((diff/step + 1),2)
+        for option in bitOptions:
+            if option-bitAttempt > 0:
+                designVars[var].update({'bits': option})
+                del designVars[var]['points in interval']
+                designVars[var].update({'points on interval': 2**option-1})
+                break
+    return designVars
+
+designVars = bitAdjust(designVars)
+
+
 def uniform(designVars): #this function determines the values that fill each individual in the intial population
-    individual = [None]*designVars
-    decider = random.randint(0,2) ###DETERMINE INFILL TYPE
-    if decider == 0: individual[0] = 'zig-zag'
-    elif decider ==1: individual[0] = 'zig-zag'
-    elif decider ==2: individual[0] = 'zig-zag'
-    individual[1] = random.choice(theta) ###DETERMINE INFILL ANGLE
-    individual[2] = random.choice(t_i) ###DETERMINE INFILL THICKNESS
-    individual[3] = random.choice(t_f) ###DETERMINE FRONT WALL THICKNESS
+    random.seed(datetime.now())
+    bits=0
+    for var in designVars:
+        bits += designVars[var]['bits']
+    individual = [random.randint(0,1) for _ in range(bits)]
     return individual
 
 def cxList(ind1, ind2): #define crossover strategy for lists
+    random.seed(datetime.now())
     cxPt = random.randint(0,len(ind1)-1)
     child1 = toolbox.individual()
     child2 = toolbox.individual()
     child1[::] = ind1[0:cxPt]+ind2[cxPt::]
     child2[::] = ind2[0:cxPt]+ind1[cxPt::]
-
     return child1,child2
 
 def mutList(individual): #define mutation strategy for lists
-    mutPoint = random.randint(0,len(individual))
-    if mutPoint==0:
-        decider = random.randint(0,2) ###MUTATE INFILL TYPE
-        if decider == 0: individual[0] = 'patt1'
-        elif decider ==1: individual[0] = 'patt2'
-        elif decider ==2: individual[0] = 'patt3'
-    if mutPoint==1: individual[1] = random.uniform(0,1) ###MUTATE INFILL THICKNESS
-    if mutPoint==2: individual[2] = random.uniform(0,1) ###MUTATE WALL THICKNESS
-    if mutPoint==3: individual[3] = random.uniform(0,1) ###MUTATE INFILL SPACING
+    random.seed(datetime.now())
+    mutPoint = random.randint(0,len(individual)-1)
+    if individual[mutPoint] == 1: individual[mutPoint] = 0
+    else: individual[mutPoint] = 1
     return individual,
 
-creator.create("Fitness", base.Fitness, weights=(-1.0,-1.0)) #creates Fitness class with two objectives to be minimized (Thermal Conductivity, Strength/Weight)
-creator.create("Individual", list, fitness=creator.Fitness) #creates Individual class (type = list) with a fitness attribute
-toolbox = base.Toolbox() # "the toolbox is a container for all the tools selected by the user" - DEAP documentation
-#sets the type and range of values contained in each individual
-toolbox.register("designVar", uniform, designVars) #attr_designVar refers to function 'uniform', with args designVars
-#registers the tool to create individuals (i.e. ind1 = toolbox.individual())
-toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.designVar) #individual refers to function initIterate, with args c.Ind & tool.attr_designVar
-#registers the tool to create a population of individuals (i.e. pop1 = toolbox.population(n=popsize))#
-toolbox.register("population", tools.initRepeat, list, toolbox.individual) #population referst to func initRepeat, with args list and tool.individual
-#registers the crossover strategy for lists
+# DEFINE EVALUATION FUNCTION
+def funcEval(individual):
+    deciInd = []
+    counter = 0
+    for var in designVars:
+        xL = designVars[var]['interval'][0]
+        xU = designVars[var]['interval'][1]
+        diff = xU-xL
+        bits = designVars[var]['bits']
+        step = diff/(2**bits-1)
+        binary = ''.join(map(str,individual[counter:(counter+bits)]))
+        deciVal = int(binary,2)
+        deciInd.append(xL+deciVal*step)
+        counter+=bits
+
+    lbda = 0.85
+    d = lbda * math.exp(-(deciInd[0] - deciInd[1]) ** 2)
+    f1 = 0.5 * (math.sqrt(1 + (deciInd[0] + deciInd[1]) ** 2) + math.sqrt(1 + (deciInd[0] - deciInd[1]) ** 2) + deciInd[0] - deciInd[1]) + d
+    f2 = 0.5 * (math.sqrt(1 + (deciInd[0] + deciInd[1]) ** 2) + math.sqrt(1 + (deciInd[0] - deciInd[1]) ** 2) - deciInd[0] + deciInd[1]) + d
+
+    return f1, f2
+
+creator.create("Fitness", base.Fitness, weights=(-1.0,-1.0))
+creator.create("Individual", list, fitness=creator.Fitness)
+toolbox = base.Toolbox()
+toolbox.register("designVar", uniform, designVars)
+toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.designVar)
+toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 toolbox.register("mate", cxList)
-#registers the mutation strategy for lists
 toolbox.register("mutate",mutList)
+toolbox.register("evaluate", funcEval)
+toolbox.register("select", tools.selNSGA2)
 
 
-# def main(): ###THIS FUNCTION RUNS THE ALGORITHM BUILT INTO DEAP
-#     random.seed(datetime.now())
-#     NGEN = 100 #number of generations
-#     MU = 50 #number of individuals to select for next generation
-#     LAMBDA = 100 #number of children produced at each generation
-#     CXPB = 0.80 #crossover probability
-#     MUTPB = 0.05 #mutation probability
-#
-#     pop = toolbox.population(n=MU)
-#     hof = tools.ParetoFront()
-#     stats = tools.Statistics(lambda ind: ind.fitness.values)
-#     stats.register("avg", np.mean, axis=0)
-#     stats.register("std", np.std, axis=0)
-#     stats.register("min", np.min, axis=0)
-#     stats.register("max", np.max, axis=0)
-#     algorithms.eaMuPlusLambda(pop, toolbox, MU, LAMBDA, CXPB, MUTPB, NGEN, stats, halloffame=hof)
-#     return pop, stats, hof
-# if __name__ == '__main__':
-#     stats = main()
-#     non_dom = tools.sortNondominated(stats[0], k=len(stats[0]), first_front_only=True)[0]
-#     for ind in non_dom:
-#         plt.title('Sample Pareto front')
-#     plt.xlabel('T_conductivity')
-#     plt.ylabel('Strength-to-Weight')
-#     plt.show()
+def main(): ###THIS FUNCTION RUNS THE ALGORITHM BUILT INTO DEAP
+    random.seed(datetime.now())
+    NGEN = gens #number of generations
+    MU = elites #number of individuals to select for next generation
+    LAMBDA = children #number of children produced at each generation
+    CXPB = cxPB #crossover probability
+    MUTPB = mutPB #mutation probability
 
-
-pop = toolbox.population(n=10)
-for member in pop:
-    print(member)
-    print()
+    pop = toolbox.population(n=popSize)
+    hof = tools.ParetoFront()
+    stats = tools.Statistics(lambda ind: ind.fitness.values)
+    stats.register("avg", np.mean, axis=0)
+    stats.register("std", np.std, axis=0)
+    stats.register("min", np.min, axis=0)
+    stats.register("max", np.max, axis=0)
+    algorithms.eaMuPlusLambda(pop, toolbox, MU, LAMBDA, CXPB, MUTPB, NGEN, stats, halloffame=hof)
+    return pop, stats, hof

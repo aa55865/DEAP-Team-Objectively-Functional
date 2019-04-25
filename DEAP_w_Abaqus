@@ -8,28 +8,47 @@ from deap import algorithms, base, tools, creator
 # DEAPsolver will have the following inputs:
 #   design variables (positional arg, stored in dict)
 #       interval
-#       bits (optional)
-#   objective functions (positional arg, stored in dict)
-#       function
-#       min or max
-#       weight
-#   mutation probability (positional arg)
-#   crossover probability (positional arg)
-#   population size/number of elites (positional arg)
-#   number of generations (positional arg)
+#       bits 
+#   objective functions
+#   number of generations 
+#   population size
+#   mutation probability 
+#   crossover probability 
 
-designVars = {'x1': {'interval': [-1.5,1.5],'type': 'continuous'}, 'x2': {'interval': [-1.5,1.5],'type': 'continuous'}}
+designVars = {'x1': {'interval': [-1.5,1.5], 'bits': 4, 'type': 'continuous'}, 'x2': {'interval': [-1.5,1.5], 'bits': 4, 'type': 'continuous'}}
 
 gens = 50
-popSize = 500
-children = 2000
-mutPB = 0.05
-cxPB = 0.70
+popSize = 100
+mutPB = 0.4
+cxPB = 0.6
+
+def funcEval(individual):
+    deciInd = []
+    counter = 0
+    for var in designVars:
+        xL = designVars[var]['interval'][0]
+        xU = designVars[var]['interval'][1]
+        diff = xU-xL
+        bits = designVars[var]['bits']
+        step = diff/(2**bits-1)
+        binary = ''.join(map(str,individual[counter:(counter+bits)]))
+        deciVal = int(binary,2)
+        deciInd.append(xL+deciVal*step)
+        counter+=bits
+
+    lbda = 0.85
+    d  = lbda * math.exp(-(deciInd[0] - deciInd[1]) ** 2)
+    f1 = 0.5 * (math.sqrt(1 + (deciInd[0] + deciInd[1]) ** 2) + math.sqrt(1 + (deciInd[0] - deciInd[1]) ** 2) + deciInd[0] - deciInd[1]) + d
+    f2 = 0.5 * (math.sqrt(1 + (deciInd[0] + deciInd[1]) ** 2) + math.sqrt(1 + (deciInd[0] - deciInd[1]) ** 2) - deciInd[0] + deciInd[1]) + d
+    return f1, f2
 
 
 def uniform(designVars): #this function determines the values that fill each individual in the intial population
     random.seed(datetime.now())
-    individual = [random.uniform(designVars[var]['interval'][0],designVars[var]['interval'][1]) for var in designVars]
+    bits=0
+    for var in designVars:
+        bits += designVars[var]['bits']
+    individual = [random.randint(0,1) for _ in range(bits)]
     return individual
 
 def cxList(ind1, ind2): #define crossover strategy for lists
@@ -44,21 +63,9 @@ def cxList(ind1, ind2): #define crossover strategy for lists
 def mutList(individual): #define mutation strategy for lists
     random.seed(datetime.now())
     mutPoint = random.randint(0,len(individual)-1)
-    counter = 0
-    key = None
-    for keys in designVars:
-        if counter == mutPoint: key = keys
-        counter+=1
-    individual[mutPoint] = random.uniform(designVars[key]['interval'][0],designVars[key]['interval'][1])
+    if individual[mutPoint] == 1: individual[mutPoint] = 0
+    else: individual[mutPoint] = 1
     return individual,
-
-# DEFINE EVALUATION FUNCTION
-def funcEval(individual):
-    lbda = 0.85
-    d  = lbda * math.exp(-(individual[0] - individual[1]) ** 2)
-    f1 = 0.5 * (math.sqrt(1 + (individual[0] + individual[1]) ** 2) + math.sqrt(1 + (individual[0] - individual[1]) ** 2) + individual[0] - individual[1]) + d
-    f2 = 0.5 * (math.sqrt(1 + (individual[0] + individual[1]) ** 2) + math.sqrt(1 + (individual[0] - individual[1]) ** 2) - individual[0] + individual[1]) + d
-    return f1, f2
 
 creator.create("Fitness", base.Fitness, weights=(-1.0,-1.0))
 creator.create("Individual", list, fitness=creator.Fitness)
@@ -72,16 +79,15 @@ toolbox.register("evaluate", funcEval)
 toolbox.register("select", tools.selNSGA2)
 
 
-
 def main(): ###THIS FUNCTION RUNS THE ALGORITHM BUILT INTO DEAP
     random.seed(datetime.now())
     NGEN = gens #number of generations
     MU = popSize #number of individuals to select for next generation
-    LAMBDA = children #number of children produced at each generation
+    LAMBDA = 10*MU #number of children produced at each generation
     CXPB = cxPB #crossover probability
     MUTPB = mutPB #mutation probability
 
-    pop = toolbox.population(n=MU)
+    pop = toolbox.population(n=popSize)
     hof = tools.ParetoFront()
     stats = tools.Statistics(lambda ind: ind.fitness.values)
     stats.register("avg", np.mean, axis=0)
@@ -91,7 +97,6 @@ def main(): ###THIS FUNCTION RUNS THE ALGORITHM BUILT INTO DEAP
     algorithms.eaMuPlusLambda(pop, toolbox, MU, LAMBDA, CXPB, MUTPB, NGEN, stats, halloffame=hof)
     return pop, stats, hof
 
-
 if __name__ == '__main__':
     stats = main()
     non_dom = tools.sortNondominated(stats[0], k=len(stats[0]), first_front_only=True)[0]
@@ -100,4 +105,3 @@ if __name__ == '__main__':
     plt.title('Dent Pareto Front')
     plt.xlabel('f1')
     plt.ylabel('f2')
-    plt.show()

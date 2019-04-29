@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 
 
-def deapSolver(designVarDict, objFuncList, popSize, gens, mutPB, cxPB, elites, children):
+def deapSolver(designVarDict, objFuncList, popSize, gens, mutPB, cxPB, elites, children, *constraintList):
 
     def funcEval(individual):
         deciInd = []
@@ -24,7 +24,24 @@ def deapSolver(designVarDict, objFuncList, popSize, gens, mutPB, cxPB, elites, c
         outputs = [func(*deciInd) for func in objFuncList]
         return tuple(outputs)
 
-    def uniform(designVars): #this function determines the values that fill each individual in the intial population
+    def feasible(individual):
+        deciInd = []
+        counter = 0
+        deciInd = []
+        counter = 0
+        for var in designVarDict:
+            xL = designVarDict[var]['interval'][0]
+            xU = designVarDict[var]['interval'][1]
+            diff = xU-xL
+            bits = designVarDict[var]['bits']
+            step = diff/(2**bits-1)
+            binary = ''.join(map(str,individual[counter:(counter+bits)]))
+            deciVal = int(binary,2)
+            deciInd.append(xL+deciVal*step)
+            counter+=bits
+
+
+    def uniform(designVars): #this function determines the values that fill each individual in the initial population
         random.seed(datetime.now())
         bits=0
         for var in designVars:
@@ -58,6 +75,8 @@ def deapSolver(designVarDict, objFuncList, popSize, gens, mutPB, cxPB, elites, c
     toolbox.register("mate", cxList)
     toolbox.register("mutate",mutList)
     toolbox.register("evaluate", funcEval)
+    if constraintList:
+        toolbox.decorate('evaluate', tools.DeltaPenalty(feasible, 10,000))
     toolbox.register("select", tools.selNSGA2)
     pop = toolbox.population(n=popSize)
     hof = tools.ParetoFront()
@@ -69,7 +88,7 @@ def deapSolver(designVarDict, objFuncList, popSize, gens, mutPB, cxPB, elites, c
 
     stats = algorithms.eaMuPlusLambda(pop, toolbox, elites, children, cxPB, mutPB, gens, stats, halloffame=hof)
 
-    if len(objFuncList) > 1:
+    if len(objFuncList) == 2 :
         non_dom = tools.sortNondominated(stats[0], k=len(stats[0]), first_front_only=True)[0]
         for ind in non_dom:
             plt.plot(*ind.fitness.values, 'bo')
@@ -77,9 +96,8 @@ def deapSolver(designVarDict, objFuncList, popSize, gens, mutPB, cxPB, elites, c
         plt.xlabel('f1')
         plt.ylabel('f2')
         plt.show()
+        return stats
     else:
         return stats
-
-
 
 

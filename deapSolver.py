@@ -90,16 +90,19 @@ def deapSolver(designVarDict, objFuncList, popSize, gens, mutPB, cxPB, elites, c
     
     fits = [ind.fitness.values[:] for ind in stats[0]]
     
-    headerList = ['Solution'] # generate headers for table
+        headerList = ['Solution'] # generate headers for table
     for var in designVarDict:
         headerList.append(var)
     for i in range(len(objFuncList)):
         headerList.append("f{0}".format(i+1))
     results = PrettyTable(headerList)
-    solution = 1
+    #print(results)
+    solution=1
+    #print(solutionList)
     for individual in stats[0]: # generate rows of values for table
-        solutionList = []
+        solutionList = [solution]
         counter = 0
+        
         for var in designVarDict:
             xL = designVarDict[var]['interval'][0]
             xU = designVarDict[var]['interval'][1]
@@ -108,13 +111,15 @@ def deapSolver(designVarDict, objFuncList, popSize, gens, mutPB, cxPB, elites, c
             step = diff/(2**bits-1)
             binary = ''.join(map(str,individual[counter:(counter+bits)]))
             deciVal = xL + int(binary,2)*step
-            print(deciVal)
-            solutionList.append(solution)
+            #print(deciVal)
             solutionList.append(deciVal)
-        for fitVal in individual.fitness.values:
-            solutionList.append(fitVal)
+            #print(solutionList)
+        #print(solutionList)
+        #print(solutionList)
+        for fit in individual.fitness.values:
+            solutionList.append(fit)
         results.add_row(solutionList)
-    solution+=1
+        solution+=1
     
     print(results)
 

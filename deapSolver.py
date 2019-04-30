@@ -3,7 +3,7 @@ import numpy as np
 from datetime import datetime
 from deap import algorithms, base, tools, creator
 import matplotlib.pyplot as plt
-
+from prettytable import PrettyTable
 
 
 def deapSolver(designVarDict, objFuncList, popSize, gens, mutPB, cxPB, elites, children, *constraintList):
@@ -87,6 +87,36 @@ def deapSolver(designVarDict, objFuncList, popSize, gens, mutPB, cxPB, elites, c
     stats.register("max", np.max, axis=0)
 
     stats = algorithms.eaMuPlusLambda(pop, toolbox, elites, children, cxPB, mutPB, gens, stats, halloffame=hof)
+    
+    fits = [ind.fitness.values[:] for ind in stats[0]]
+    
+    headerList = ['Solution'] # generate headers for table
+    for var in designVarDict:
+        headerList.append(var)
+    for i in range(len(objFuncList)):
+        headerList.append("f{0}".format(i+1))
+    results = PrettyTable(headerList)
+    solution = 1
+    for individual in stats[0]: # generate rows of values for table
+        solutionList = []
+        counter = 0
+        for var in designVarDict:
+            xL = designVarDict[var]['interval'][0]
+            xU = designVarDict[var]['interval'][1]
+            diff = xU-xL
+            bits = designVarDict[var]['bits']
+            step = diff/(2**bits-1)
+            binary = ''.join(map(str,individual[counter:(counter+bits)]))
+            deciVal = xL + int(binary,2)*step
+            print(deciVal)
+            solutionList.append(solution)
+            solutionList.append(deciVal)
+        for fitVal in individual.fitness.values:
+            solutionList.append(fitVal)
+        results.add_row(solutionList)
+    solution+=1
+    
+    print(results)
 
     if len(objFuncList) == 2 :
         non_dom = tools.sortNondominated(stats[0], k=len(stats[0]), first_front_only=True)[0]

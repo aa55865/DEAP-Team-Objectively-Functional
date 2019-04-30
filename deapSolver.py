@@ -90,7 +90,7 @@ def deapSolver(designVarDict, objFuncList, popSize, gens, mutPB, cxPB, elites, c
     
     fits = [ind.fitness.values[:] for ind in stats[0]]
     
-        headerList = ['Solution'] # generate headers for table
+    headerList = ['Solution'] # generate headers for table
     for var in designVarDict:
         headerList.append(var)
     for i in range(len(objFuncList)):

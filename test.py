@@ -1,19 +1,21 @@
 from deapSolver import *
 import math
-    
-DESIGNVARS = {'x1': {'interval': [-1.5,1.5], 'bits': 8, 'type': 'continuous'}, 'x2': {'interval': [-1.5,1.5], 'bits': 8, 'type': 'continuous'}}
-GENS = 20
-ELITES = 50
-CHILDREN = 200
-POPSIZE = 50
-MUTPB = 0.2
-CXPB = 0.8
-LBDA = 0.85
+
+designVarDict = {'x1': {'interval': [-1.5,1.5], 'bits': 8, 'type': 'continuous'}, 'x2': {'interval': [-1.5,1.5], 'bits': 8, 'type': 'continuous'}}
+gens = 20
+elites = 50
+children = 200
+popSize = 50
+mutPB = 0.2
+cxPB = 0.8
+lbda = 0.85
 
 class TestProblem:
 
-    def __init__(self,designVars,gens,elites,children,popSize,mutPB,cxPB,lbda):
-        self.designVars = designVars
+    def __init__(self,designVarDict,gens,elites,children,popSize,mutPB,cxPB,lbda):
+        self.designVarDict = designVarDict
+        self.x1=designVarDict[0] #really not sure how to access this value!!!!!
+        self.x2=designVarDict[1]#Really unsure how to access this value!!!!!
         self.gens = gens
         self.elites = elites
         self.children = children
@@ -28,10 +30,9 @@ class TestProblem:
         funcList = [f1, f2]
         return funcList
 
-func_list= TestProblem(designVars=DESIGNVARS,popSize=POPSIZE, gens=GENS,mutPB=MUTPB, cxPB=CXPB,children=CHILDREN, elites=ELITES,lbda=LBDA)
+objFuncList= TestProblem.testEqns(designVarDict=designVarDict,popSize=popSize, gens=gens,mutPB=mutPB, cxPB=cxPB,children=children, elites=elites,lbda=lbda)
 
-stats = deapSolver(designVars=DESIGNVARS, objFuncList=funcList, popSize=POPSIZE, gens=GENS,mutPB=MUTPB, cxPB=CXPB,children=CHILDREN, elites=ELITES)
-
+stats = deapSolver(designVarDict=designVars, objFuncList=objFuncList, popSize=popSize, gens=gens,mutPB=mutPB, cxPB=cxPB, children=children, elites=elites)
 # ------------------------------------------------------------------------------------------------
 # TEST PROBLEM 1
 # ------------------------------------------------------------------------------------------------

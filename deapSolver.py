@@ -71,7 +71,7 @@ def deapSolver(design_var_dict, obj_func_list, obj_func_names=None, norm_facts=N
         obj_func_names = ['f{}'.format(i+1) for i in range(len(obj_func_list))]
 
 
-    def bi2de_ind(individual): #convert binary individuals to list of decimal variable values
+    def bi2de_ind(individual): # convert binary individuals to list of decimal variable values
         deciInd = []
         counter = 0
         for var in design_var_dict:
@@ -86,27 +86,27 @@ def deapSolver(design_var_dict, obj_func_list, obj_func_names=None, norm_facts=N
             counter += bits
         return deciInd
 
-    def func_eval(individual): #evaluate individual fitness by plugging variables into objective function(s)
+    def func_eval(individual): # evaluate individual fitness by plugging variables into objective function(s)
         deciInd = bi2de_ind(individual)
         outputs = [func(*deciInd)/norm_fact for func,norm_fact in zip(obj_func_list,norm_facts)]
         return tuple(outputs)
 
-    ops = {'>': operator.gt,'<': operator.lt,'>=':operator.ge,'<=':operator.le,'=':operator.eq}
-    def feasibility(individual): #determine if an individual's variables violate any constraints
+    ops = {'>': operator.gt,'<': operator.lt,'>=':operator.ge,'<=':operator.le,'=':operator.eq} #register operator dictionary for constraint evaluation
+    def feasibility(individual): # determine if an individual's variables violate any constraints
         deciInd = bi2de_ind(individual)
         for constraint in constraints:
             if ops[constraint[1]](constraint[0](*deciInd),constraint[2]) is False:
                 return False
         return True
 
-    def uniform(): #fill each individual in the initial population with total bits in design_var_dict
+    def uniform(): # fill each individual in the initial population with total bits in design_var_dict
         bits=0
         for var in design_var_dict:
             bits += design_var_dict[var]['bits']
         individual = [random.randint(0,1) for _ in range(bits)]
         return individual
 
-    def cx_list(ind1, ind2): #define crossover strategy for lists
+    def cx_list(ind1, ind2): # define crossover strategy for lists
         cxPt = random.randint(0,len(ind1)-1)
         child1 = toolbox.individual()
         child2 = toolbox.individual()
@@ -114,43 +114,42 @@ def deapSolver(design_var_dict, obj_func_list, obj_func_names=None, norm_facts=N
         child2[::] = ind2[0:cxPt]+ind1[cxPt::]
         return child1,child2
 
-    def mut_list(individual): #define mutation strategy for lists
+    def mut_list(individual): # define mutation strategy for lists
         mutPoint = random.randint(0,len(individual)-1)
         if individual[mutPoint] == 1: individual[mutPoint] = 0
         else: individual[mutPoint] = 1
         return individual,
 
-    #intialize all parameters 
-    weights = tuple([-1.0 for _ in obj_func_list])
-    creator.create("Fitness", base.Fitness, weights=weights)
-    creator.create("Individual", list, fitness=creator.Fitness)
-    toolbox = base.Toolbox()
-    toolbox.register("designVar", uniform)
-    toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.designVar)
-    toolbox.register("population", tools.initRepeat, list, toolbox.individual)
-    toolbox.register("mate", cx_list)
-    toolbox.register("mutate",mut_list)
-    toolbox.register("evaluate", func_eval)
+    weights = tuple([-1.0 for _ in obj_func_list]) # weight for all objectives are defaulted to -1
+    creator.create("Fitness", base.Fitness, weights=weights) # create fitness class inherited from 'base.Fitness' class
+    creator.create("Individual", list, fitness=creator.Fitness) # create Individual class inherited from 'list' class
+    toolbox = base.Toolbox() # initialize toolbox class from 'base', contains all evolutionary operators
+    toolbox.register("initializer", uniform) # register function 'uniform' to initialize individuals
+    toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.initializer) # register 'individual' creator in toolbox
+    toolbox.register("population", tools.initRepeat, list, toolbox.individual) # register 'population' creator in toolbox
+    toolbox.register("mate", cx_list) # register crossover strategy as function 'cx_list'
+    toolbox.register("mutate",mut_list) # register mutation strategy as function 'mut_list'
+    toolbox.register("evaluate", func_eval) # register evaluation strategy as function 'func_eval'
     if constraints:
-        toolbox.decorate("evaluate", tools.DeltaPenality(feasibility,10000))
-    toolbox.register("select", tools.selNSGA2)
-    stats = tools.Statistics(lambda ind: ind.fitness.values)
+        toolbox.decorate("evaluate", tools.DeltaPenality(feasibility,10000)) # decorate evaluation strategy with constraints if they exist, penalize invalid individuals
+    toolbox.register("select", tools.selNSGA2) # register selection strategy for sorting evaluated individuals as NSGA-II
+    stats = tools.Statistics(lambda ind: ind.fitness.values) # log statistics during evolution
     stats.register("avg", np.mean, axis=0)
     stats.register("std", np.std, axis=0)
     stats.register("min", np.min, axis=0)
     stats.register("max", np.max, axis=0)
 
-    pop = toolbox.population(n=POPSIZE)
-    hof = tools.ParetoFront()
-    output = algorithms.eaMuPlusLambda(pop, toolbox, SURVIVORS, CHILDREN, CXPB, MUTPB, GENS, stats, halloffame=hof)
+    pop = toolbox.population(n=POPSIZE) # generate initial population
+    hof = tools.ParetoFront() # register criteria for selecting hall of fame individuals (Pareto dominant solutions)
+    output = algorithms.eaMuPlusLambda(pop, toolbox, SURVIVORS, CHILDREN, CXPB, MUTPB, GENS, stats, halloffame=hof) # conduct evolutionary optimization process
 
     headerList = ['Solution Point']
     for var in design_var_dict: headerList.append(var)
     for name in obj_func_names: headerList.append(name)
-    results = PrettyTable(headerList)
+    results = PrettyTable(headerList) # generate table to store and display results
 
     solution = 1
-    for individual in output[0]:
+    for individual in output[0]: # put optimal solutions into 'results' table
         solutionList = [solution]
         deciInd = bi2de_ind(individual)
         for val in deciInd:
@@ -160,7 +159,7 @@ def deapSolver(design_var_dict, obj_func_list, obj_func_names=None, norm_facts=N
         results.add_row(solutionList)
         solution+=1
 
-    if len(obj_func_list) == 2 :
+    if len(obj_func_list) == 2 : # if two objective functions provided, plot Pareto Frontier
         non_dom = tools.sortNondominated(output[0], k=len(output[0]), first_front_only=True)[0]
         for ind in non_dom:
             fitvals = [ind.fitness.value*norm_fact for ind.fitness.value,norm_fact in zip(ind.fitness.values,norm_facts)]

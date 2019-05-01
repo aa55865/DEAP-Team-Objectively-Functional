@@ -1,9 +1,5 @@
 from deapSolver import *
 import math
-
-from deapSolver import *
-import math
-
     
 DESIGNVARS = {'x1': {'interval': [-1.5,1.5], 'bits': 8, 'type': 'continuous'}, 'x2': {'interval': [-1.5,1.5], 'bits': 8, 'type': 'continuous'}}
 GENS = 20

@@ -1,6 +1,41 @@
 from deapSolver import *
 import math
 
+from deapSolver import *
+import math
+
+    
+DESIGNVARS = {'x1': {'interval': [-1.5,1.5], 'bits': 8, 'type': 'continuous'}, 'x2': {'interval': [-1.5,1.5], 'bits': 8, 'type': 'continuous'}}
+GENS = 20
+ELITES = 50
+CHILDREN = 200
+POPSIZE = 50
+MUTPB = 0.2
+CXPB = 0.8
+LBDA = 0.85
+
+class TestProblem:
+
+    def __init__(self,designVars,gens,elites,children,popSize,mutPB,cxPB,lbda):
+        self.designVars = designVars
+        self.gens = gens
+        self.elites = elites
+        self.children = children
+        self.popSize = popSize
+        self.mutPB = mutPB
+        self.cxPB = cxPB
+        self.lbda = lbda
+
+    def testEqns(self):
+        f1 = lambda x1, x2: 0.5 * (math.sqrt(1 + (x1 + x2) ** 2) + math.sqrt(1 + (x1 - x2) ** 2) + x1 - x2) + lbda* math.exp(-(x1 - x2) ** 2)
+        f2 = lambda x1, x2: 0.5 * (math.sqrt(1 + (x1 + x2) ** 2) + math.sqrt(1 + (x1 - x2) ** 2) - x1 + x2) + lbda* math.exp(-(x1 - x2) ** 2)
+        funcList = [f1, f2]
+        return funcList
+
+func_list= TestProblem(designVars=DESIGNVARS,popSize=POPSIZE, gens=GENS,mutPB=MUTPB, cxPB=CXPB,children=CHILDREN, elites=ELITES,lbda=LBDA)
+
+stats = deapSolver(designVars=DESIGNVARS, objFuncList=funcList, popSize=POPSIZE, gens=GENS,mutPB=MUTPB, cxPB=CXPB,children=CHILDREN, elites=ELITES)
+
 # ------------------------------------------------------------------------------------------------
 # TEST PROBLEM 1
 # ------------------------------------------------------------------------------------------------

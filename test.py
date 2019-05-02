@@ -1,4 +1,4 @@
-from deapSolver import *
+from deap_solver import *
 import math
 
 # ------------------------------------------------------------------------------------------------
@@ -14,7 +14,7 @@ children = 100
 f1 = lambda x: -(math.sin(x) + 0.05*x**2 + 1)
 func_list = [f1]
 
-results = deapSolver(design_vars, func_list, POPSIZE=popSize, GENS=gens, CXPB=cxPB, SURVIVORS=survivors, CHILDREN=children)
+results = deap_solver(design_vars, func_list, POPSIZE=popSize, GENS=gens, CXPB=cxPB, SURVIVORS=survivors, CHILDREN=children)
 print(results)
 
 # ------------------------------------------------------------------------------------------------
@@ -33,7 +33,7 @@ print(results)
 # f2 = lambda x1, x2: 0.5 * (math.sqrt(1 + (x1 + x2) ** 2) + math.sqrt(1 + (x1 - x2) ** 2) - x1 + x2) + 0.85 * math.exp(-(x1 - x2) ** 2)
 # func_list = [f1, f2]
 #
-# results = deapSolver(design_vars, func_list,POPSIZE=popSize,GENS=gens,MUTPB=mutPB,CXPB=cxPB,SURVIVORS=survivors,CHILDREN=children)
+# results = deap_solver(design_vars, func_list,POPSIZE=popSize,GENS=gens,MUTPB=mutPB,CXPB=cxPB,SURVIVORS=survivors,CHILDREN=children)
 # print(results)
 
 # ------------------------------------------------------------------------------------------------
@@ -59,5 +59,5 @@ print(results)
 # survivors = 100
 # children = 1000
 # 
-# results = deapSolver(design_vars, func_list, obj_func_names=func_names, norm_facts=norm_facts, POPSIZE=popSize, GENS=gens, MUTPB=mutPB, CXPB=cxPB, SURVIVORS=survivors, CHILDREN=children, constraints=constraint_list)
+# results = deap_solver(design_vars, func_list, obj_func_names=func_names, norm_facts=norm_facts, POPSIZE=popSize, GENS=gens, MUTPB=mutPB, CXPB=cxPB, SURVIVORS=survivors, CHILDREN=children, constraints=constraint_list)
 # print(results)

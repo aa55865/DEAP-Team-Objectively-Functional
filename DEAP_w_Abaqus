@@ -1,31 +1,43 @@
 import time, random, copy, math
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 from datetime import datetime
 from deap import algorithms, base, tools, creator
 
 def Abaqus_evaluation(individual): ### this algorithm calculates fitness values for a given individual
 #   save values contained in individual in a text file: file.txt
 #   file.txt referenced by Abaqus script to determine variables
-#   
-#       if individual[0] == 'zig-zag':
-#           *generate abaqus model based on zig-zag infill*
-#       elif individual[0] == 'sine-wave':
-#           *generate abaqus model based on sine-wave infill*
-#       elif individual[0] == 'strut':
-#           *generate abaqus model based on strut infill*
+    
+        if individual[0] == 'zig-zag':
+            os.system("abaqus cae noGUI=zigzag_script_thermo.py") # opens Abaqus, runs script to generate/run model, write results
+            os.system("abaqus cae noGUI=zigzag_script_stress.py")
+        elif individual[0] == 'sine-wave':
+            os.system("abaqus cae noGUI=sine-wave_script_thermo.py")
+            os.system("abaqus cae noGUI=sine-wave_script_stress.py")
+        elif individual[0] == 'strut':
+            os.system("abaqus cae noGUI=strut_script_thermo.py")
+            os.system("abaqus cae noGUI=strut_script_stress.py")
 #       etc...
 
 #   while 'results file' not in 'Abaqus results directory':
 #       wait
 
-#   read Abaqus 'results file' into python and parse
-#   T_conductivity = 'temperature simulation data'
-#   strength_to_weight = 'load simulation data'
-    T_conductivity = 0.5*(math.sqrt(1+(individual[1]+individual[2])**2)*math.sqrt(1+(individual[1]-individual[2])**2)+individual[1]-individual[2])
-    stngth_to_wght = 0.5*(math.sqrt(1+(individual[1]+individual[2])**2)*math.sqrt(1+(individual[1]-individual[2])**2)-individual[1]-individual[2])
+    tempr_numeric = 0.0;
+    tempr_counter = 0;
+    with open ('temperature_results.txt', 'rt') as tempr_file: # Open file
+        for tempr in tempr_file:              
+            tempr_numeric = tempr_numeric + float(tempr);
+            tempr_counter = tempr_counter + 1;
+    tempr_avg = tempr_numeric/tempr_counter;
 
-    return T_conductivity, stngth_to_wght
+    stress_numeric = -math.inf; 
+    with open ('stress_results.txt', 'rt') as stress_file: # Open file
+        for stress in stress_file:              
+            if stress_numeric < float(stress):
+                stress_numeric=float(stress)
+
+    temp_avg, stress_numeric
 
 
 def uniform(designVars): #this function determines the values that fill each individual in the intial population

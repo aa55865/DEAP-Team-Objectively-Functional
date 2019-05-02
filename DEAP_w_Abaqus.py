@@ -6,7 +6,9 @@ from datetime import datetime
 from deap import algorithms, base, tools, creator
 
 def Abaqus_evaluation(individual): ### this algorithm calculates fitness values for a given individual
-#       save values contained in individual in a text file: file.txt referenced by Abaqus script to determine variables
+        with open("inputs.txt","w+") as writefile:
+            for value in individual:
+                writefile.write(value+'\n')
     
         if individual[0] == 'zig-zag':
             os.system("abaqus cae noGUI=zigzag_script_thermo.py") # opens Abaqus, runs script to generate/run model, write results

@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from prettytable import PrettyTable
 
 
-def deapSolver(design_var_dict, obj_func_list, obj_func_names=None, norm_facts=None, POPSIZE=1000, GENS=50, MUTPB=None, CXPB=None, SURVIVORS=100, CHILDREN=1000, constraints=None):
+def deap_solver(design_var_dict, obj_func_list, obj_func_names=None, norm_facts=None, POPSIZE=1000, GENS=50, MUTPB=None, CXPB=None, SURVIVORS=100, CHILDREN=1000, constraints=None):
     """
     This is an optimization solver based on the Distributed Evolutionary Algorithms in Python (DEAP) package. It uses
     binary representations of design variables in each individual. Given an objective function (or list of objective

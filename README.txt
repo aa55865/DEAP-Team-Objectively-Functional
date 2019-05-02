@@ -1,5 +1,12 @@
-# DEAP-Team-Objectively-Functional
-Multi-Objective Genetic Algorithm Optimization
+Team: Objective(ly) Function(al)
+
+Members: Oliver Uitz
+         Indu Venu
+         Andrew Allan
+--------------------------------
+
+
+Multi-Objective Genetic Algorithm Optimization Solver
 
 NOTE: Please install DEAP and PrettyTable packages to run this solver.
 Link to DEAP: https://pypi.org/project/deap/
@@ -52,5 +59,6 @@ functions, and constraints, the solver evolves each population of individuals ba
                       POPSIZE=popSize, GENS=gens, MUTPB=mutPB, CXPB=cxPB, SURVIVORS=survivors, CHILDREN=children,
                       constraints=constraint_list)
   
-  # Citation for DEAP
-    Félix-Antoine Fortin, François-Michel De Rainville, Marc-André Gardner, Marc Parizeau and Christian Gagné, "DEAP: Evolutionary           Algorithms Made Easy", Journal of Machine Learning Research, vol. 13, pp. 2171-2175, jul 2012. Paper
+CITATION FOR DEAP
+-----------------
+Félix-Antoine Fortin, François-Michel De Rainville, Marc-André Gardner, Marc Parizeau and Christian Gagné, "DEAP: Evolutionary Algorithms Made Easy", Journal of Machine Learning Research, vol. 13, pp. 2171-2175, jul 2012. Paper

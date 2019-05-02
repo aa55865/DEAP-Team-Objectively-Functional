@@ -37,7 +37,7 @@ def Abaqus_evaluation(individual): ### this algorithm calculates fitness values 
             if stress_numeric < float(stress):
                 stress_numeric=float(stress)
 
-    temp_avg, stress_numeric
+    return temp_avg, stress_numeric
 
 
 def uniform(designVars): #this function determines the values that fill each individual in the intial population

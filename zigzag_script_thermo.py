@@ -51,8 +51,8 @@ mesh_size= 0.005 #may be a tad coarse
 mod.setValues(absoluteZero=-273, stefanBoltzmann=5.67e-08)
 
 #import sketch variables, SI units
-valnum=1
-with open ('HT_inputfile.txt', 'rt') as var_values: # Open file
+valnum=0
+with open ('inputs.txt', 'rt') as var_values: # Open file
     for value in var_values:
         if valnum==1:
             ts= value

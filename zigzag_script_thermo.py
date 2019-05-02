@@ -275,7 +275,7 @@ mdb.jobs[model_name].waitForCompletion()
 odb = openOdb(path='C:\\Temp\\test11.odb')
 step1 = odb.steps['Step-1']
 
-with open("testytesttest.txt","w+") as writefile:
+with open("HT_outputfile.txt","w+") as writefile:
 	for f in step1.historyRegions.values():
 		region = step1.historyRegions[f.name]
 		NT11Data = region.historyOutputs['NT11'].data

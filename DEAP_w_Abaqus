@@ -5,13 +5,15 @@ from datetime import datetime
 from deap import algorithms, base, tools, creator
 
 def Abaqus_evaluation(individual): ### this algorithm calculates fitness values for a given individual
-#   convert values contained in individual into script to generate Abaqus model
+#   save values contained in individual in a text file: file.txt
+#   file.txt referenced by Abaqus script to determine variables
+#   
 #       if individual[0] == 'zig-zag':
-#           *generate abaqus script based on zig-zag infill*
+#           *generate abaqus model based on zig-zag infill*
 #       elif individual[0] == 'sine-wave':
-#           *generate abaqus script based on sine-wave infill*
+#           *generate abaqus model based on sine-wave infill*
 #       elif individual[0] == 'strut':
-#           *generate abaqus script based on strut infill*
+#           *generate abaqus model based on strut infill*
 #       etc...
 
 #   while 'results file' not in 'Abaqus results directory':

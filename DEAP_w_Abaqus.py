@@ -1,126 +1,117 @@
-import time, random, copy, math
+import random, operator, time
 import numpy as np
-import matplotlib.pyplot as plt
-import os
-from datetime import datetime
 from deap import algorithms, base, tools, creator
+import matplotlib.pyplot as plt
+from prettytable import PrettyTable
+import os
+from results_extractor import *
 
-def Abaqus_evaluation(individual): ### this algorithm calculates fitness values for a given individual
-        with open("inputs.txt","w+") as writefile:
+
+def deap_solver(design_var_dict, obj_func_names=None, norm_facts=None, POPSIZE=1000, GENS=50, MUTPB=None, CXPB=None, SURVIVORS=100, CHILDREN=1000, constraints=None):
+
+    def func_eval(individual): # evaluate individual fitness by plugging variables into objective function(s)
+        infill_type = individual[0]
+        with open('inputs.txt','w+') as writefile:
             for value in individual:
-                writefile.write(value+'\n')
-    
-        if individual[0] == 'zig-zag':
-            os.system("abaqus cae noGUI=zigzag_script_thermo.py") # opens Abaqus, runs script to generate/run model, write results
-            os.system("abaqus cae noGUI=zigzag_script_stress.py")
-        elif individual[0] == 'sine-wave':
-            os.system("abaqus cae noGUI=sine-wave_script_thermo.py")
-            os.system("abaqus cae noGUI=sine-wave_script_stress.py")
-        elif individual[0] == 'strut':
-            os.system("abaqus cae noGUI=strut_script_thermo.py")
-            os.system("abaqus cae noGUI=strut_script_stress.py")
-#       etc...
+                writefile.write('{}\n'.format(value))
 
-#   while 'results file' not in 'Abaqus results directory':
-#       wait
+        os.system('abaqus cae noGUI={}_thermo.py'.format(infill_type))
+        os.system('abaqus cae noGUI={}_stress.py'.format(infill_type))
 
-    tempr_numeric = 0.0;
-    tempr_counter = 0;
-    with open ('temperature_results.txt', 'rt') as tempr_file: # Open file
-        for tempr in tempr_file:              
-            tempr_numeric = tempr_numeric + float(tempr);
-            tempr_counter = tempr_counter + 1;
-    tempr_avg = tempr_numeric/tempr_counter;
+        while 'stress_results' not in 'Abaqus results directory':
+            time.sleep(5)
 
-    stress_numeric = -math.inf; 
-    with open ('stress_results.txt', 'rt') as stress_file: # Open file
-        for stress in stress_file:              
-            if stress_numeric < float(stress):
-                stress_numeric=float(stress)
+        results = extractor()
+        return results
 
-    return temp_avg, stress_numeric
+    def uniform(): # fill each individual in the initial population with total bits in design_var_dict
+        individual = []
+        for var in design_var_dict:
+            if design_var_dict[var]['type'] == 'discrete':
+                individual.append(random.choice(design_var_dict[var]['options']))
+            else:
+                individual.append(random.uniform(design_var_dict[var]['interval'][0],design_var_dict[var]['interval'][1]))
+        return individual
 
+    def cx_list(ind1, ind2): # define crossover strategy for lists
+        cxPt = random.randint(0,len(ind1)-1)
+        child1 = toolbox.individual()
+        child2 = toolbox.individual()
+        child1[::] = ind1[0:cxPt]+ind2[cxPt::]
+        child2[::] = ind2[0:cxPt]+ind1[cxPt::]
+        return child1,child2
 
-def uniform(designVars): #this function determines the values that fill each individual in the intial population
-    individual = [None]*designVars
-    decider = random.randint(0,2) ###DETERMINE INFILL TYPE
-    if decider == 0: individual[0] = 'patt1'
-    elif decider ==1: individual[0] = 'patt2'
-    elif decider ==2: individual[0] = 'patt3'
-    individual[1] = random.uniform(0,1) ###DETERMINE INFILL THICKNESS
-    individual[2] = random.uniform(0,1) ###DETERMINE WALL THICKNESS
-    individual[3] = random.uniform(0,1) ###DETERMINE INFILL SPACING
-    return individual
+    def mut_list(individual): # define mutation strategy for lists
+        mutPoint = random.randint(0,len(individual)-1)
+        if type(individual[mutPoint]) is str:
+            if individual[mutPoint] == 'zig-zag': individual[mutPoint] = 'sine-wave'
+            else: individual[mutPoint] == 'zig-zag'
+        else: individual[mutPoint] = random.choice(design_var_dict['thickness']['interval'][0],design_var_dict['thickness']['interval'][1])
+        return individual,
 
-def cxList(ind1, ind2): #define crossover strategy for lists
-    cxPt = random.randint(0,len(ind1)-1)
-    child1 = toolbox.individual()
-    child2 = toolbox.individual()
-    child1[::] = ind1[0:cxPt]+ind2[cxPt::]
-    child2[::] = ind2[0:cxPt]+ind1[cxPt::]
-
-    return child1,child2
-
-def mutList(individual): #define mutation strategy for lists
-    mutPoint = random.randint(0,len(individual))
-    if mutPoint==0:
-        decider = random.randint(0,2) ###MUTATE INFILL TYPE
-        if decider == 0: individual[0] = 'patt1'
-        elif decider ==1: individual[0] = 'patt2'
-        elif decider ==2: individual[0] = 'patt3'
-    if mutPoint==1: individual[1] = random.uniform(0,1) ###MUTATE INFILL THICKNESS
-    if mutPoint==2: individual[2] = random.uniform(0,1) ###MUTATE WALL THICKNESS
-    if mutPoint==3: individual[3] = random.uniform(0,1) ###MUTATE INFILL SPACING
-    return individual,
-
-designVars = 4 #number of values contained within an individual
-creator.create("Fitness", base.Fitness, weights=(-1.0,-1.0)) #creates Fitness class with two objectives to be minimized (Thermal Conductivity, Strength/Weight)
-creator.create("Individual", list, fitness=creator.Fitness) #creates Individual class (type = list) with a fitness attribute
-
-toolbox = base.Toolbox() # "the toolbox is a container for all the tools selected by the user" - DEAP documentation
-#sets the type and range of values contained in each individual
-toolbox.register("designVar", uniform, designVars) #attr_designVar refers to function 'uniform', with args designVars
-#registers the tool to create individuals (i.e. ind1 = toolbox.individual())
-toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.designVar) #individual refers to function initIterate, with args c.Ind & tool.attr_designVar
-#registers the tool to create a population of individuals (i.e. pop1 = toolbox.population(n=popsize))#
-toolbox.register("population", tools.initRepeat, list, toolbox.individual) #population referst to func initRepeat, with args list and tool.individual
-#registers the crossover strategy for lists
-toolbox.register("mate", cxList)
-#registers the mutation strategy for lists
-toolbox.register("mutate",mutList)
-#registers the function to determine fitness when toolbox.evaluate is called
-toolbox.register("evaluate", Abaqus_evaluation) 
-#registers the genetic algorithm to be implemented
-toolbox.register("select", tools.selNSGA2)
-
-
-def main(): ###THIS FUNCTION RUNS THE ALGORITHM BUILT INTO DEAP
-    random.seed(datetime.now())
-    NGEN = 100 #number of generations
-    MU = 50 #number of individuals to select for next generation
-    LAMBDA = 100 #number of children produced at each generation
-    CXPB = 0.80 #crossover probability
-    MUTPB = 0.05 #mutation probability
-    
-    pop = toolbox.population(n=MU)
-    hof = tools.ParetoFront()
-    stats = tools.Statistics(lambda ind: ind.fitness.values)
+    creator.create("Fitness", base.Fitness, weights=(-1.0,-1.0)) # create fitness class inherited from 'base.Fitness' class
+    creator.create("Individual", list, fitness=creator.Fitness) # create Individual class inherited from 'list' class
+    toolbox = base.Toolbox() # initialize toolbox class from 'base', contains all evolutionary operators
+    toolbox.register("initializer", uniform) # register function 'uniform' to initialize individuals
+    toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.initializer) # register 'individual' creator in toolbox
+    toolbox.register("population", tools.initRepeat, list, toolbox.individual) # register 'population' creator in toolbox
+    toolbox.register("mate", cx_list) # register crossover strategy as function 'cx_list'
+    toolbox.register("mutate",mut_list) # register mutation strategy as function 'mut_list'
+    toolbox.register("evaluate", func_eval) # register evaluation strategy as function 'func_eval'
+    # if constraints:
+    #     toolbox.decorate("evaluate", tools.DeltaPenality(feasibility,10000)) # decorate evaluation strategy with constraints if they exist
+    toolbox.register("select", tools.selNSGA2) # register selection strategy for sorting evaluated individuals as NSGA-II
+    stats = tools.Statistics(lambda ind: ind.fitness.values) # log statistics during evolution
     stats.register("avg", np.mean, axis=0)
     stats.register("std", np.std, axis=0)
     stats.register("min", np.min, axis=0)
     stats.register("max", np.max, axis=0)
-    algorithms.eaMuPlusLambda(pop, toolbox, MU, LAMBDA, CXPB, MUTPB, NGEN, stats, halloffame=hof)
-    return pop, stats, hof
 
+    pop = toolbox.population(n=POPSIZE) # generate initial population
+    hof = tools.ParetoFront() # register criteria for selecting hall of fame individuals (Pareto dominant solutions)
+    # output = algorithms.eaMuPlusLambda(pop, toolbox, SURVIVORS, CHILDREN, CXPB, MUTPB, GENS, stats, halloffame=hof) # conduct evolutionary optimization process
+    print(pop)
 
+    #
+    # headerList = ['Solution Point']
+    # for var in design_var_dict: headerList.append(var)
+    # for name in obj_func_names: headerList.append(name)
+    # results = PrettyTable(headerList) # generate table to store and display results
+    #
+    # solution = 1
+    # for individual in output[0]: # put optimal solutions into 'results' table
+    #     solutionList = [solution]
+    #     deciInd = bi2de_ind(individual)
+    #     for val in deciInd:
+    #         solutionList.append(val)
+    #     for val,norm_fact in zip(individual.fitness.values,norm_facts):
+    #         solutionList.append(val*norm_fact)
+    #     results.add_row(solutionList)
+    #     solution+=1
+    #
+    # if len(obj_func_list) == 2 : # if two objective functions provided, plot Pareto Frontier
+    #     non_dom = tools.sortNondominated(output[0], k=len(output[0]), first_front_only=True)[0]
+    #     for ind in non_dom:
+    #         fitvals = [ind.fitness.value*norm_fact for ind.fitness.value,norm_fact in zip(ind.fitness.values,norm_facts)]
+    #         plt.plot(*fitvals,'bo')
+    #     plt.title('Pareto Front')
+    #     plt.xlabel('{}'.format(obj_func_names[0]))
+    #     plt.ylabel('{}'.format(obj_func_names[1]))
+    #     plt.show()
+    #     return results
+    # else:
+    #     return results
 
+    design_vars = {'infill': {'type': 'discrete', 'options': ['zig-zag', 'sine-wave']},
+                   'thickness': {'type': 'continuous', 'interval': [3, 9], 'bits': 8}}
+    gens = 50
+    popSize = 5
+    cxPB = 0.5
+    mutPB = 0.5
+    survivors = 10
+    children = 100
 
-if __name__ == '__main__':
-    stats = main()
-    non_dom = tools.sortNondominated(stats[0], k=len(stats[0]), first_front_only=True)[0]
-    for ind in non_dom:
-        plt.plot(ind.fitness.values[0], ind.fitness.values[1], 'bo')
-    plt.title('Sample Pareto front')
-    plt.xlabel('T_conductivity')
-    plt.ylabel('Strength-to-Weight')
-    plt.show()
+    obj_func_names = ['T_avg [Celsius]', 'max_stress [MPA]']
+    norm_facts = [30, 60000]
+
+    deap_solver(design_vars, obj_func_names, norm_facts, popSize, gens, mutPB, cxPB, survivors, children)

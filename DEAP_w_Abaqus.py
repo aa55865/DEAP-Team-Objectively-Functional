@@ -69,49 +69,45 @@ def deap_solver(design_var_dict, obj_func_names=None, norm_facts=None, POPSIZE=1
 
     pop = toolbox.population(n=POPSIZE) # generate initial population
     hof = tools.ParetoFront() # register criteria for selecting hall of fame individuals (Pareto dominant solutions)
-    # output = algorithms.eaMuPlusLambda(pop, toolbox, SURVIVORS, CHILDREN, CXPB, MUTPB, GENS, stats, halloffame=hof) # conduct evolutionary optimization process
-    print(pop)
+    output = algorithms.eaMuPlusLambda(pop, toolbox, SURVIVORS, CHILDREN, CXPB, MUTPB, GENS, stats, halloffame=hof) # conduct evolutionary optimization process
 
-    #
-    # headerList = ['Solution Point']
-    # for var in design_var_dict: headerList.append(var)
-    # for name in obj_func_names: headerList.append(name)
-    # results = PrettyTable(headerList) # generate table to store and display results
-    #
-    # solution = 1
-    # for individual in output[0]: # put optimal solutions into 'results' table
-    #     solutionList = [solution]
-    #     deciInd = bi2de_ind(individual)
-    #     for val in deciInd:
-    #         solutionList.append(val)
-    #     for val,norm_fact in zip(individual.fitness.values,norm_facts):
-    #         solutionList.append(val*norm_fact)
-    #     results.add_row(solutionList)
-    #     solution+=1
-    #
-    # if len(obj_func_list) == 2 : # if two objective functions provided, plot Pareto Frontier
-    #     non_dom = tools.sortNondominated(output[0], k=len(output[0]), first_front_only=True)[0]
-    #     for ind in non_dom:
-    #         fitvals = [ind.fitness.value*norm_fact for ind.fitness.value,norm_fact in zip(ind.fitness.values,norm_facts)]
-    #         plt.plot(*fitvals,'bo')
-    #     plt.title('Pareto Front')
-    #     plt.xlabel('{}'.format(obj_func_names[0]))
-    #     plt.ylabel('{}'.format(obj_func_names[1]))
-    #     plt.show()
-    #     return results
-    # else:
-    #     return results
 
-    design_vars = {'infill': {'type': 'discrete', 'options': ['zig-zag', 'sine-wave']},
-                   'thickness': {'type': 'continuous', 'interval': [3, 9], 'bits': 8}}
-    gens = 50
-    popSize = 5
-    cxPB = 0.5
-    mutPB = 0.5
-    survivors = 10
-    children = 100
+    headerList = ['Solution Point']
+    for var in design_var_dict: headerList.append(var)
+    for name in obj_func_names: headerList.append(name)
+    results = PrettyTable(headerList) # generate table to store and display results
 
-    obj_func_names = ['T_avg [Celsius]', 'max_stress [MPA]']
-    norm_facts = [30, 60000]
+    solution = 1
+    solutionList = []
+    for individual in output[0]: # put optimal solutions into 'results' table
+        solutionList.append(individual[0])
+        solutionList.append(individual[1])
+        for val,norm_fact in zip(individual.fitness.values,norm_facts):
+            solutionList.append(val*norm_fact)
+        results.add_row(solutionList)
+        solution+=1
 
-    deap_solver(design_vars, obj_func_names, norm_facts, popSize, gens, mutPB, cxPB, survivors, children)
+    non_dom = tools.sortNondominated(output[0], k=len(output[0]), first_front_only=True)[0]
+    for ind in non_dom:
+        fitvals = [ind.fitness.value*norm_fact for ind.fitness.value,norm_fact in zip(ind.fitness.values,norm_facts)]
+        plt.plot(*fitvals,'bo')
+    plt.title('Pareto Front')
+    plt.xlabel('{}'.format(obj_func_names[0]))
+    plt.ylabel('{}'.format(obj_func_names[1]))
+    plt.show()
+    return results
+
+
+design_vars = {'infill': {'type': 'discrete', 'options': ['zig-zag', 'sine-wave','cross-hatch','grid']},
+               'thickness': {'type': 'continuous', 'interval': [3, 9], 'bits': 8}}
+gens = 50
+popSize = 10
+cxPB = 0.5
+mutPB = 0.5
+survivors = 5
+children = 10
+
+obj_func_names = ['T_avg [Celsius]', 'max_stress [MPA]']
+norm_facts = [30, 60000]
+
+deap_solver(design_vars, obj_func_names, norm_facts, popSize, gens, mutPB, cxPB, survivors, children)

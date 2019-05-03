@@ -8,21 +8,27 @@ from results_extractor import *
 
 
 def deap_solver(design_var_dict, obj_func_names=None, norm_facts=None, POPSIZE=1000, GENS=50, MUTPB=None, CXPB=None, SURVIVORS=100, CHILDREN=1000, constraints=None):
+    combination_dict = {'initial_val': None}
 
     def func_eval(individual): # evaluate individual fitness by plugging variables into objective function(s)
-        infill_type = individual[0]
-        with open('inputs.txt','w+') as writefile:
-            for value in individual:
-                writefile.write('{}\n'.format(value))
+        combination = '{}, {:.1f}'.format(individual[0],individual[1])
+        if combination not in combination_dict.keys(): #update dictionary with current solution string if not in dictionary yet
+            combination_dict.update({combination: (1,1)}) #assign default value to solution in solution dictionary (gets overwritten at the end of func_eval
+            infill_type = individual[0]
+            with open('inputs.txt','w+') as writefile:
+                for value in individual:
+                    writefile.write('{}\n'.format(value))
 
-        os.system('abaqus cae noGUI={}_thermo.py'.format(infill_type))
-        os.system('abaqus cae noGUI={}_stress.py'.format(infill_type))
+            os.system('abaqus cae noGUI={}_thermo.py'.format(infill_type))
+            os.system('abaqus cae noGUI={}_stress.py'.format(infill_type))
 
-        while 'stress_results' not in 'Abaqus results directory':
-            time.sleep(5)
-
-        results = extractor()
-        return results
+            while 'stress_results' not in 'Abaqus results directory':
+                time.sleep(5)
+            results = extractor()
+            combination_dict[combination] = results #update solution dictionary to check against future individuals
+            return results
+        else:
+            return combination_dict[combination] #return same fitness value as previously calculated if individual already evaluated
 
     def uniform(): # fill each individual in the initial population with total bits in design_var_dict
         individual = []

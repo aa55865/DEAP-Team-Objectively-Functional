@@ -11,6 +11,7 @@ def deap_solver(design_var_dict, obj_func_names=None, norm_facts=None, POPSIZE=1
     combination_dict = {'initial_val': None}
 
     def func_eval(individual): # evaluate individual fitness by plugging variables into objective function(s)
+        print(individual)
         combination = '{}, {:.1f}'.format(individual[0],individual[1])
         if combination not in combination_dict.keys(): #update dictionary with current solution string if not in dictionary yet
             combination_dict.update({combination: (1,1)}) #assign default value to solution in solution dictionary (gets overwritten at the end of func_eval
@@ -18,17 +19,24 @@ def deap_solver(design_var_dict, obj_func_names=None, norm_facts=None, POPSIZE=1
             with open('inputs.txt','w+') as writefile:
                 for value in individual:
                     writefile.write('{}\n'.format(value))
-
+                        
             os.system('abaqus cae noGUI={}_thermo.py'.format(infill_type))
-            os.system('abaqus cae noGUI={}_stress.py'.format(infill_type))
-
-            while 'stress_results' not in 'Abaqus results directory':
+            while os.path.isfile('temperature_results.txt') is False:
                 time.sleep(5)
-            results = extractor()
-            combination_dict[combination] = results #update solution dictionary to check against future individuals
-            return results
+            os.system('abaqus cae noGUI={}_stress.py'.format(infill_type))
+            while os.path.isfile('stress_results.txt') is False:
+                time.sleep(5)
+                
+            outputs = extractor()
+            results = [result/norm_fact for result, norm_fact in zip(outputs,norm_facts)]
+            combination_dict[combination] = tuple(results) #update solution dictionary to check against future individuals
+            os.remove('stress_results.txt')
+            os.remove('temperature_results.txt')
+            os.remove('inputs.txt')
+            print(results)
+            return tuple(results)
         else:
-            return combination_dict[combination] #return same fitness value as previously calculated if individual already evaluated
+            return combination_dict[combination]
 
     def uniform(): # fill each individual in the initial population with total bits in design_var_dict
         individual = []
@@ -52,7 +60,7 @@ def deap_solver(design_var_dict, obj_func_names=None, norm_facts=None, POPSIZE=1
         if type(individual[mutPoint]) is str:
             if individual[mutPoint] == 'zig-zag': individual[mutPoint] = 'sine-wave'
             else: individual[mutPoint] == 'zig-zag'
-        else: individual[mutPoint] = random.choice(design_var_dict['thickness']['interval'][0],design_var_dict['thickness']['interval'][1])
+        else: individual[mutPoint] = random.uniform(design_var_dict['thickness']['interval'][0],design_var_dict['thickness']['interval'][1])
         return individual,
 
     creator.create("Fitness", base.Fitness, weights=(-1.0,-1.0)) # create fitness class inherited from 'base.Fitness' class
@@ -95,7 +103,7 @@ def deap_solver(design_var_dict, obj_func_names=None, norm_facts=None, POPSIZE=1
 
     non_dom = tools.sortNondominated(output[0], k=len(output[0]), first_front_only=True)[0]
     for ind in non_dom:
-        fitvals = [ind.fitness.value*norm_fact for ind.fitness.value,norm_fact in zip(ind.fitness.values,norm_facts)]
+        fitvals = [ind.fitness.value for ind.fitness.value in ind.fitness.values]
         plt.plot(*fitvals,'bo')
     plt.title('Pareto Front')
     plt.xlabel('{}'.format(obj_func_names[0]))
@@ -104,14 +112,14 @@ def deap_solver(design_var_dict, obj_func_names=None, norm_facts=None, POPSIZE=1
     return results
 
 
-design_vars = {'infill': {'type': 'discrete', 'options': ['zig-zag', 'sine-wave','cross-hatch','grid']},
-               'thickness': {'type': 'continuous', 'interval': [3, 9], 'bits': 8}}
-gens = 50
-popSize = 10
+design_vars = {'infill': {'type': 'discrete', 'options': ['zig-zag', 'sine-wave']},
+               'thickness': {'type': 'continuous', 'interval': [3, 7], 'bits': 8}}
+gens = 5
+popSize = 5
 cxPB = 0.5
 mutPB = 0.5
 survivors = 5
-children = 10
+children = 5
 
 obj_func_names = ['T_avg [Celsius]', 'max_stress [MPA]']
 norm_facts = [30, 60000]

@@ -1,107 +1,226 @@
-import random, math
+import random, operator, os, json, time
 import numpy as np
-import matplotlib.pyplot as plt
-from datetime import datetime
 from deap import algorithms, base, tools, creator
+import matplotlib.pyplot as plt
+from prettytable import PrettyTable
+from results_extractor import *
 
 
-# DEAPsolver will have the following inputs:
-#   design variables (positional arg, stored in dict)
-#       interval
-#       bits 
-#   objective functions
-#   number of generations 
-#   population size
-#   mutation probability 
-#   crossover probability 
+def deap_solver(continuous_vars, discrete_vars=(), obj_func_list=(), obj_func_names=(), norm_facts=(), POPSIZE=1000, GENS=50, MUTPB=0.5, CXPB=0.5, SURVIVORS=100, CHILDREN=1000, constraints=()):
+    """
+    This is an optimization solver based on the Distributed Evolutionary Algorithms in Python (DEAP) package. It uses
+    binary representations of design variables in each individual. Given an objective function (or list of objective
+    functions) and constraints, the solver evolves each population of individuals based on the NSGA-II genetic algorithm.
 
-designVars = {'x1': {'interval': [-1.5,1.5], 'bits': 4, 'type': 'continuous'}, 'x2': {'interval': [-1.5,1.5], 'bits': 4, 'type': 'continuous'}}
+    :param design_var_dict: dictionary of design variables
+    :param obj_func_list: list of anonymous functions that represents the objective(s)
+    :param obj_func_names: optional, specifies function names
+    :param norm_facts: specify normalization factors for objective function outputs. If problem has
+                       multiple objective functions with outputs expected to be on different orders of magnitude, this
+                       is very important to include. Choose normalization factors approximately equal to maximum
+                       expected output from its associated function
+    :param POPSIZE: size of initial population
+    :param GENS: number of generations to be evaluated
+    :param MUTPB: probability of mutation
+    :param CXPB: probability of crossover
+    :param SURVIVORS: number of individuals selected after initial population is evaluated. This governs the size of all
+                      future populations
+    :param CHILDREN: number of offspring to be produced from the current population at each generation
+    :param constraints: list constraints to be applied in evaluating the validity of each individual
+    :return: the solver returns a table of solution points that contains the variable and objective function values for
+             all optimized solutions. A print(results) statement will display the table. For problems with two objective
+             functions, the solver also returns a plot of the Pareto Frontier
 
-gens = 50
-popSize = 100
-mutPB = 0.4
-cxPB = 0.6
+    EXAMPLE SETUP FOR SOLVER:
 
-def funcEval(individual):
-    deciInd = []
-    counter = 0
-    for var in designVars:
-        xL = designVars[var]['interval'][0]
-        xU = designVars[var]['interval'][1]
-        diff = xU-xL
-        bits = designVars[var]['bits']
-        step = diff/(2**bits-1)
-        binary = ''.join(map(str,individual[counter:(counter+bits)]))
-        deciVal = int(binary,2)
-        deciInd.append(xL+deciVal*step)
-        counter+=bits
+            design_var_dict = {'r': {'interval': [0,10],'bits': 10},'h':{'interval':[0,20],'bits':10}}
 
-    lbda = 0.85
-    d  = lbda * math.exp(-(deciInd[0] - deciInd[1]) ** 2)
-    f1 = 0.5 * (math.sqrt(1 + (deciInd[0] + deciInd[1]) ** 2) + math.sqrt(1 + (deciInd[0] - deciInd[1]) ** 2) + deciInd[0] - deciInd[1]) + d
-    f2 = 0.5 * (math.sqrt(1 + (deciInd[0] + deciInd[1]) ** 2) + math.sqrt(1 + (deciInd[0] - deciInd[1]) ** 2) - deciInd[0] + deciInd[1]) + d
-    return f1, f2
+            S = lambda r,h: math.pi*r*math.sqrt(r**2+h**2)
+            T = lambda r,h: math.pi*r**2+math.pi*r*math.sqrt(r**2+h**2)
+            obj_func_list = [S,T]
+            obj_func_names = ['Lateral Surface Area','Total Area']
+            norm_facts = [155,225]
 
+            constraints = [[V, '>', 200]] --> [[func(r,h),'operator',val],[func(r,h),'operator',val],etc.]
 
-def uniform(designVars): #this function determines the values that fill each individual in the intial population
-    random.seed(datetime.now())
-    bits=0
-    for var in designVars:
-        bits += designVars[var]['bits']
-    individual = [random.randint(0,1) for _ in range(bits)]
-    return individual
+            gens = 50
+            popSize = 1000
+            mutPB = 0.1
+            cxPB = 0.9
+            survivors = 100
+            children = 1000
 
-def cxList(ind1, ind2): #define crossover strategy for lists
-    random.seed(datetime.now())
-    cxPt = random.randint(0,len(ind1)-1)
-    child1 = toolbox.individual()
-    child2 = toolbox.individual()
-    child1[::] = ind1[0:cxPt]+ind2[cxPt::]
-    child2[::] = ind2[0:cxPt]+ind1[cxPt::]
-    return child1,child2
+            results = deapSolver(design_vars, func_list, obj_func_names=func_names, norm_facts=norm_facts,
+                      POPSIZE=popSize, GENS=gens, MUTPB=mutPB, CXPB=cxPB, SURVIVORS=survivors, CHILDREN=children,
+                      constraints=constraint_list)
+    """
+    combination_dict = {'initial_val': None}
 
-def mutList(individual): #define mutation strategy for lists
-    random.seed(datetime.now())
-    mutPoint = random.randint(0,len(individual)-1)
-    if individual[mutPoint] == 1: individual[mutPoint] = 0
-    else: individual[mutPoint] = 1
-    return individual,
+    # Assign values optional keyword arguments whose length depends on the number of objective functions specified
+    if norm_facts is ():
+        norm_facts = [1 for _ in obj_func_list]
 
-creator.create("Fitness", base.Fitness, weights=(-1.0,-1.0))
-creator.create("Individual", list, fitness=creator.Fitness)
-toolbox = base.Toolbox()
-toolbox.register("designVar", uniform, designVars)
-toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.designVar)
-toolbox.register("population", tools.initRepeat, list, toolbox.individual)
-toolbox.register("mate", cxList)
-toolbox.register("mutate",mutList)
-toolbox.register("evaluate", funcEval)
-toolbox.register("select", tools.selNSGA2)
+    if MUTPB is 0:
+        if discrete_vars:
+            n = len(discrete_vars)+len(continuous_vars)
+        else:
+            n = len(continuous_vars)
+        MUTPB = 1/n
 
+    if CXPB is 0:
+        CXPB  = 1-MUTPB
 
-def main(): ###THIS FUNCTION RUNS THE ALGORITHM BUILT INTO DEAP
-    random.seed(datetime.now())
-    NGEN = gens #number of generations
-    MU = popSize #number of individuals to select for next generation
-    LAMBDA = 10*MU #number of children produced at each generation
-    CXPB = cxPB #crossover probability
-    MUTPB = mutPB #mutation probability
+    if obj_func_names is ():
+        obj_func_names = ['f{}'.format(i+1) for i in range(len(obj_func_list))]
 
-    pop = toolbox.population(n=popSize)
-    hof = tools.ParetoFront()
-    stats = tools.Statistics(lambda ind: ind.fitness.values)
+    def func_eval(individual): # evaluate individual fitness, if individual contains discrete vars --> add conditionals
+        print(individual)
+        combination = '{}, {:.1f}'.format(individual[0], individual[1])
+        if combination not in combination_dict.keys():  # update dictionary with current solution string if not in dictionary yet
+            combination_dict.update({combination: (1, 1)})  # assign default value to solution in solution dictionary (gets overwritten at the end of func_eval
+            infill_type = individual[0]
+            with open('inputs.txt', 'w+') as writefile:
+                for value in individual:
+                    writefile.write('{}\n'.format(value))
+
+            os.system('abaqus cae noGUI={}_thermo.py'.format(infill_type))
+            os.system('abaqus cae noGUI={}_stress.py'.format(infill_type))
+            while os.path.isfile('stress_results.txt') is False:
+                time.sleep(5)
+
+            outputs = extractor()
+            results = [result / norm_fact for result, norm_fact in zip(outputs, norm_facts)]
+            combination_dict[combination] = tuple(results)  # update solution dictionary to check against future individuals
+            os.remove('stress_results.txt')
+            os.remove('temperature_results.txt')
+            os.remove('inputs.txt')
+            print(results)
+            return tuple(results)
+        else:
+            return combination_dict[combination]
+
+    ops = {'>': operator.gt,'<': operator.lt,'>=':operator.ge,'<=':operator.le,'=':operator.eq} #register operator dictionary for constraint evaluation
+    def feasibility(individual): # determine if an individual's variables violate any constraints
+        for constraint in constraints:
+            if ops[constraint[1]](constraint[0](*individual),constraint[2]) is False:
+                return False
+        return True
+
+    def uniform(): # fill each individual in the initial population
+        individual = []
+        if discrete_vars is not ():
+            for var in discrete_vars:
+                individual.append(random.choice(discrete_vars[var]))
+
+        for var in continuous_vars:
+            individual.append(random.uniform(continuous_vars[var][0],continuous_vars[var][1]))
+
+        return individual
+
+    def cx_list(ind1, ind2): # define crossover strategy for lists
+        cxPt = random.randint(0,len(ind1)-1)
+        child1 = toolbox.individual()
+        child2 = toolbox.individual()
+        child1[::] = ind1[0:cxPt]+ind2[cxPt::]
+        child2[::] = ind2[0:cxPt]+ind1[cxPt::]
+        return child1,child2
+
+    def mut_list(individual): # define mutation strategy for lists
+        mutPoint = random.randint(0,len(individual)-1)
+        if discrete_vars is not (): #check to see if individual contains discrete variables
+            if mutPoint <= (len(discrete_vars)-1): #check if mutation point corresponds to discrete variable
+                counter = 0
+                for var in discrete_vars: #find discrete variable that corresponds to current mutation point
+                    if counter == mutPoint:
+                        temp_list = discrete_vars[var].copy() #remove current value from list of values corresponding to current mutation point
+                        temp_list.remove(individual[mutPoint])
+                        individual[mutPoint] = random.choice(temp_list) #randomly select new value
+                        break
+                    counter+=1
+            else: #if mutation point corresponds to continuous variable, randomly select new value in that variable's range
+                counter = 0
+                for var in continuous_vars:
+                    if counter == mutPoint:
+                        individual[mutPoint] = random.uniform(continuous_vars[var][0],continuous_vars[var][1])
+                        break
+                    counter+=1
+        else:
+            counter = 0
+            for var in continuous_vars:
+                if counter == mutPoint:
+                    individual[mutPoint] = random.uniform(continuous_vars[var][0], continuous_vars[var][1])
+                    break
+                counter += 1
+        return individual,
+
+    weights = tuple([-1.0 for _ in obj_func_list]) # weight for all objectives are defaulted to -1
+    creator.create("Fitness", base.Fitness, weights=weights) # create fitness class inherited from 'base.Fitness' class
+    creator.create("Individual", list, fitness=creator.Fitness) # create Individual class inherited from 'list' class
+    toolbox = base.Toolbox() # initialize toolbox class from 'base', contains all evolutionary operators
+    toolbox.register("initializer", uniform) # register function 'uniform' to initialize individuals
+    toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.initializer) # register 'individual' creator in toolbox
+    toolbox.register("population", tools.initRepeat, list, toolbox.individual) # register 'population' creator in toolbox
+    toolbox.register("mate", cx_list) # register crossover strategy as function 'cx_list'
+    toolbox.register("mutate",mut_list) # register mutation strategy as function 'mut_list'
+    toolbox.register("evaluate", func_eval) # register evaluation strategy as function 'func_eval'
+    if constraints:
+        toolbox.decorate("evaluate", tools.DeltaPenality(feasibility,10000)) # decorate evaluation strategy with constraints if they exist
+    toolbox.register("select", tools.selNSGA2) # register selection strategy for sorting evaluated individuals as NSGA-II
+    stats = tools.Statistics(lambda ind: ind.fitness.values) # log statistics during evolution
     stats.register("avg", np.mean, axis=0)
     stats.register("std", np.std, axis=0)
     stats.register("min", np.min, axis=0)
     stats.register("max", np.max, axis=0)
-    algorithms.eaMuPlusLambda(pop, toolbox, MU, LAMBDA, CXPB, MUTPB, NGEN, stats, halloffame=hof)
-    return pop, stats, hof
 
-if __name__ == '__main__':
-    stats = main()
-    non_dom = tools.sortNondominated(stats[0], k=len(stats[0]), first_front_only=True)[0]
+    pop = toolbox.population(n=POPSIZE)  # generate initial population
+    hof = tools.ParetoFront()  # register criteria for selecting hall of fame individuals (Pareto dominant solutions)
+    output = algorithms.eaMuPlusLambda(pop, toolbox, SURVIVORS, CHILDREN, CXPB, MUTPB, GENS, stats,
+                                       halloffame=hof)  # conduct evolutionary optimization process
+
+    headerList = ['Solution Point']
+    if discrete_vars is not ():
+        for var in discrete_vars: headerList.append(var)
+        for var in continuous_vars: headerList.append(var)
+    else:
+        for var in continuous_vars: headerList.append(var)
+    for name in obj_func_names: headerList.append(name)
+    results = PrettyTable(headerList)  # generate table to store and display results
+
+    solution = 1
+    for individual in output[0]:  # put optimal solutions into 'results' table
+        solutionList = [solution]
+        for i in range(len(individual)):
+            solutionList.append(individual[i])
+        for val, norm_fact in zip(individual.fitness.values, norm_facts):
+            solutionList.append(val * norm_fact)
+        results.add_row(solutionList)
+        solution += 1
+
+    non_dom = tools.sortNondominated(output[0], k=len(output[0]), first_front_only=True)[0]
     for ind in non_dom:
-        plt.plot(ind.fitness.values[0],ind.fitness.values[1],'bo')
-    plt.title('Dent Pareto Front')
-    plt.xlabel('f1')
-    plt.ylabel('f2')
+        fitvals = [ind.fitness.value for ind.fitness.value in ind.fitness.values]
+        plt.plot(*fitvals, 'bo')
+    plt.title('Pareto Front')
+    plt.xlabel('{}'.format(obj_func_names[0]))
+    plt.ylabel('{}'.format(obj_func_names[1]))
+    plt.show()
+
+    combination_dict.pop('initial_val')
+    with open('meta_data', 'w') as f:
+        json.dump(combination_dict, f)
+
+    return results
+
+continuous_vars = {'thickness': [2,8]}
+discrete_vars = {'infill': ['zig-zag','sine-wave','cross-hatch']}
+func_names = ['Normalized Temperature (T/25C)','Normalized Max Stress (sigma/60kPa)']
+norm_facts = [25,60000]
+
+popsize = 5
+survivors = 5
+children = 5
+gens = 5
+mutpb = 0.5
+cxpb = 0.5
+
+results = deap_solver(continuous_vars=continuous_vars, discrete_vars=discrete_vars, obj_func_names=func_names,norm_facts=norm_facts,POPSIZE=popsize, GENS= gens, MUTPB=mutpb, CXPB=cxpb, SURVIVORS=survivors, CHILDREN=children)

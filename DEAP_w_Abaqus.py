@@ -1,4 +1,11 @@
-import random, operator, time
+# -*- coding: utf-8 -*-
+"""
+Created on Sun May  5 22:35:53 2019
+
+@author: Sim
+"""
+
+import random, operator, time, json
 import numpy as np
 from deap import algorithms, base, tools, creator
 import matplotlib.pyplot as plt
@@ -12,7 +19,8 @@ def deap_solver(design_var_dict, obj_func_names=None, norm_facts=None, POPSIZE=1
 
     def func_eval(individual): # evaluate individual fitness by plugging variables into objective function(s)
         print(individual)
-        combination = '{}, {:.1f}'.format(individual[0],individual[1])
+        combination = '{}, {:.1f}, {:.0f}'.format(*individual) #USE THIS LINE FOR ZIG-ZAG MULTI-VARIABLE
+#        combination = '{}, {:.1f}'.format(*individual) #USE THIS LINE FOR GRID
         if combination not in combination_dict.keys(): #update dictionary with current solution string if not in dictionary yet
             combination_dict.update({combination: (1,1)}) #assign default value to solution in solution dictionary (gets overwritten at the end of func_eval
             infill_type = individual[0]
@@ -57,10 +65,15 @@ def deap_solver(design_var_dict, obj_func_names=None, norm_facts=None, POPSIZE=1
 
     def mut_list(individual): # define mutation strategy for lists
         mutPoint = random.randint(0,len(individual)-1)
-        if type(individual[mutPoint]) is str:
-            if individual[mutPoint] == 'zig-zag': individual[mutPoint] = 'sine-wave'
-            else: individual[mutPoint] == 'zig-zag'
-        else: individual[mutPoint] = random.uniform(design_var_dict['thickness']['interval'][0],design_var_dict['thickness']['interval'][1])
+        if mutPoint == 0:
+            if len(individual) == 2:
+                mutPoint = 1
+            elif len(individual) == 3:
+                mutPoint = random.randint(1,2)
+        if mutPoint == 1: 
+            individual[mutPoint] = random.uniform(design_var_dict['thickness']['interval'][0],design_var_dict['thickness']['interval'][1])
+        elif mutPoint ==2:
+            individual[mutPoint] = random.uniform(design_var_dict['angle']['interval'][0],design_var_dict['angle']['interval'][1])
         return individual,
 
     creator.create("Fitness", base.Fitness, weights=(-1.0,-1.0)) # create fitness class inherited from 'base.Fitness' class
@@ -84,7 +97,10 @@ def deap_solver(design_var_dict, obj_func_names=None, norm_facts=None, POPSIZE=1
     pop = toolbox.population(n=POPSIZE) # generate initial population
     hof = tools.ParetoFront() # register criteria for selecting hall of fame individuals (Pareto dominant solutions)
     output = algorithms.eaMuPlusLambda(pop, toolbox, SURVIVORS, CHILDREN, CXPB, MUTPB, GENS, stats, halloffame=hof) # conduct evolutionary optimization process
-
+    
+    combination_dict.pop('initial_val')
+    with open('meta_data_{}'.format(design_vars['infill']['options'][0]), 'w') as f:
+        json.dump(combination_dict, f)
 
     headerList = ['Solution Point']
     for var in design_var_dict: headerList.append(var)
@@ -92,10 +108,10 @@ def deap_solver(design_var_dict, obj_func_names=None, norm_facts=None, POPSIZE=1
     results = PrettyTable(headerList) # generate table to store and display results
 
     solution = 1
-    solutionList = []
     for individual in output[0]: # put optimal solutions into 'results' table
-        solutionList.append(individual[0])
-        solutionList.append(individual[1])
+        solutionList = [solution]
+        for value in individual:
+            solutionList.append(value)
         for val,norm_fact in zip(individual.fitness.values,norm_facts):
             solutionList.append(val*norm_fact)
         results.add_row(solutionList)
@@ -109,19 +125,36 @@ def deap_solver(design_var_dict, obj_func_names=None, norm_facts=None, POPSIZE=1
     plt.xlabel('{}'.format(obj_func_names[0]))
     plt.ylabel('{}'.format(obj_func_names[1]))
     plt.show()
+    
     return results
 
+###THIS IS THE DICTIONARY FOR THE GRID RUN
+#design_vars = {'infill': {'type': 'discrete', 'options': ['grid']},
+#               'thickness': {'type': 'continuous', 'interval': [3, 7]}}
 
-design_vars = {'infill': {'type': 'discrete', 'options': ['zig-zag', 'sine-wave']},
-               'thickness': {'type': 'continuous', 'interval': [3, 7], 'bits': 8}}
-gens = 5
-popSize = 5
+####THIS IS THE DICTIONARY FOR THE MULTIVARIABLE ZIG-ZAG RUN
+design_vars = {'infill': {'type': 'discrete', 'options': ['zig-zag']},
+               'thickness': {'type': 'continuous', 'interval': [3, 8]},
+               'angle': {'type': 'continuous','interval': [30,60]}}
+
+#USE THESE PARAMETERS FOR A TEST RUN
+#gens = 1
+#popSize = 2
+#cxPB = 0.5
+#mutPB = 0.5
+#survivors = 2
+#children = 2
+
+#USE THESE PARAMETERS FOR A REAL RUN
+gens = 20
+popSize = 40
 cxPB = 0.5
 mutPB = 0.5
-survivors = 5
-children = 5
+survivors = 40
+children = 40
 
-obj_func_names = ['T_avg [Celsius]', 'max_stress [MPA]']
-norm_facts = [30, 60000]
+obj_func_names = ['T_avg [T/30]', 'max_stress [sigma/420000]']
+norm_facts = [30, 420000]
 
-deap_solver(design_vars, obj_func_names, norm_facts, popSize, gens, mutPB, cxPB, survivors, children)
+results = deap_solver(design_vars, obj_func_names, norm_facts, popSize, gens, mutPB, cxPB, survivors, children)
+print(results)
